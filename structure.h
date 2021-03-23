@@ -2,7 +2,7 @@
 #define STRUCTURE_H
 
 // slaves terminal
-#define SLAVES 3
+#define SLAVES 4
 
 // system mode  => definisce se il sistema di allarme è acceso o spento
 #define DISABLED 0   
@@ -26,7 +26,8 @@ extern const char* password;
 extern const char* mqtt_server;
 extern const char* clientid;
 extern const char* topic_allarm;
-extern const char* topic_allarm_on;
+extern const char* topic_allarm_mode;
+extern const char* topic_allarm_sound;
 extern const char* topic_allarm_received;
 //extern const char topic_slaves[SLAVES];
 
@@ -48,6 +49,6 @@ struct home_state {
 extern int TERMINALS[]; // input array dei pin dei pulsanti che simulano gli slaves
 extern int LED[];   // output array dei led che indicano lo stato degli slaves (aperti/chiusi)
 extern int BUZZER;  // pin del buzzer di allarme
-
+extern int ALLARM_LED; 
 
 #endif  

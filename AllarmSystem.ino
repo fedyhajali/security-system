@@ -22,8 +22,7 @@ void setup() {
 
   Serial.begin(115200);
   pinMode(BUZZER, OUTPUT);
-  pinMode(13, INPUT);
-  pinMode(4, OUTPUT);
+  pinMode(ALLARM_LED, OUTPUT);
   
 
   /* Inizializzazione struttura e semafori*/
@@ -33,15 +32,13 @@ void setup() {
     pinMode(TERMINALS[i], INPUT);
     pinMode(LED[i], OUTPUT);
   }
-  home.allarm_mode = DISABLED;
+  home.allarm_mode = ENABLED;
   home.allarm_sound = OFF;
   home.open_slaves = 0;
   mutex_slaves = xSemaphoreCreateCounting(1, 1);
   mutex_allarm = xSemaphoreCreateCounting(1, 1);
   mutex_allarm_priv = xSemaphoreCreateCounting(1, 0);
 
-
-  
   Serial.println("Creating slave tasks..");
   delay(200);   
   
@@ -76,7 +73,7 @@ void setup() {
     /* Creazione task di connessione */
   xTaskCreate(
     TaskConnection,   /* Task function. */
-    "Task for the connection to Wifi and MQTT",     /* name of task. */
+    "Task connection",     /* name of task. */
     10000,       /* Stack size of task */
     NULL,        /* parameter of the task */
     10,           /* priority of the task */
@@ -103,8 +100,8 @@ void TaskAllarm(void *pvParameters) {
     xSemaphoreTake(mutex_allarm, 0xffffffff);
     home.allarm_sound = ON;
     xSemaphoreGive(mutex_allarm);
-    client.publish(topic_allarm_on, "ALLARM ON!!!");
-    digitalWrite(4, HIGH);
+    client.publish(topic_allarm_sound, "ALLARM ON!!!");
+    digitalWrite(ALLARM_LED, HIGH);
     digitalWrite(BUZZER, HIGH);
     delay(200);
     Serial.println("ALLARM ON");
@@ -118,9 +115,9 @@ void TaskAllarm(void *pvParameters) {
     xSemaphoreGive(mutex_allarm);
     
     digitalWrite(BUZZER, LOW);
-    digitalWrite(4, LOW);
+    digitalWrite(ALLARM_LED, LOW);
     Serial.println("ALLARM OFF");
-    client.publish(topic_allarm_on, "ALLARM OFF");
+    client.publish(topic_allarm_sound, "ALLARM OFF");
     
   }  
 }
@@ -187,9 +184,9 @@ void TaskConnection(void *pvParameters) {
   while (1)
   {
     client.loop();
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
   
-   vTaskDelayUntil( &xLastWakeTime, xFrequency );
 }
 
 void WifiConnection() {
