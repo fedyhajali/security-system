@@ -16,14 +16,17 @@ char topic_id[30]; //copia del topic in arrivo in subscription
 char topic_payload[60]; //copia del payload in arrivo in subscription
 boolean ACK = 0;
 
-const char* topic_alarm = "KfZ91%%7BM@/ALLARM";
+const char* topic_alarm_sound = "KfZ91%%7BM@/ALLARM/SOUND";
 const char* topic_alarm_mode_on = "KfZ91%%7BM@/ALLARM/MODE/ON";
 const char* topic_alarm_mode_off = "KfZ91%%7BM@/ALLARM/MODE/OFF";
-const char* topic_alarm_sound = "KfZ91%%7BM@/ALLARM/SOUND";
+const char* topic_alarm_sound_text = "KfZ91%%7BM@/ALLARM/SOUND/TEXT";
 const char* topic_alarm_received = "KfZ91%%7BM@/ALLARM/RECEIVED";
+const char* topic_motion_detection_code = "KfZ91%%7BM@/PERSONAL/CODE";
 const char* topic_open_slaves = "KfZ91%%7BM@/SLAVES/OPEN";
 
-//unsigned int distance;
+int curr_distance;
+int last_distance;
+bool first_read = false;
 
 WiFiClient espClient;
 PubSubClient client(mqtt_server, 1883, callback, espClient);

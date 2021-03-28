@@ -5,7 +5,12 @@ TaskHandle_t Handle_TaskSlave[SLAVES];
 TaskHandle_t Handle_TaskAlarm;
 TaskHandle_t Handle_TaskMain;
 TaskHandle_t Handle_TaskConnection;
-TaskHandle_t Handle_TaskMovement;
+TaskHandle_t Handle_TaskMovementDetection;
+
+// Timers
+
+TimerHandle_t Timer_MovementDetection;
+TimerHandle_t Timer_code;
 
 // Semaphores
 SemaphoreHandle_t mutex_home;
@@ -17,14 +22,10 @@ void TaskSlave(void* pvParameters);
 void TaskAlarm(void* pvParameters);
 void TaskMain(void* pvParameters);
 void TaskConnection(void* pvParameters);
-void TaskMovement(void* pvParameters);
+void TaskMovementDetection(void* pvParameters);
 
 // shared struct resource
 struct home_state home;
-
-
-// NewPing setup of pins and maximum distance
-NewPing sonar(MOV_TRIG, MOV_ECHO, MAX_DISTANCE); 
 
 void setup() {
 
@@ -46,6 +47,9 @@ void setup() {
   mutex_home = xSemaphoreCreateCounting(1, 1);
   mutex_alarm = xSemaphoreCreateCounting(1, 0);
   mutex_movement = xSemaphoreCreateCounting(1, 0);
+
+  Timer_MovementDetection = xTimerCreate("Movement sensor Timer", pdMS_TO_TICKS(2000), pdTRUE,(void *) 0, timer_callback);
+  Timer_code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(10000), pdFALSE,(void *) 1, timer_callback);
 
   Serial.println("Creating slave tasks..");
   delay(200);   
@@ -102,42 +106,14 @@ void setup() {
 
     /* Creazione task di rilevamento movimenti */
   xTaskCreatePinnedToCore(
-    TaskMovement,   /* Task function. */
+    TaskMovementDetection,   /* Task function. */
     "Movement Detection Task",     /* name of task. */
     1000,       /* Stack size of task */
     NULL,        /* parameter of the task */
     10,           /* priority of the task */
-    &Handle_TaskMovement,      /* Task handle to keep track of created task */
+    &Handle_TaskMovementDetection,      /* Task handle to keep track of created task */
     1);
     delay(200);
-  
-}
-
-void TaskConnection(void *pvParameters) {
-  TickType_t xLastWakeTime;
-  const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
-  // Initialise the xLastWakeTime variable with the current time.
-  xLastWakeTime = xTaskGetTickCount();
-  
-  Serial.print("Created Connection Task on core: ");
-  Serial.println(xPortGetCoreID());
-  
-  /* Connessione Wifi */
-  WifiConnection();
-
-  /* Connessione MQTT */
-  mqttConnection();
-  
-  while (1)
-  {
-    client.loop();
-    
-    if (!client.connected()) {
-      reconnect();
-    }
-    
-    vTaskDelayUntil( &xLastWakeTime, xFrequency );
-  }
   
 }
 
@@ -146,39 +122,34 @@ void TaskAlarm(void *pvParameters) {
   Serial.print("Created Allarm Task on core: ");
   Serial.println(xPortGetCoreID());
 
-
   while (1)
   {
     /*  SOSPENSIONE ALLARME */
-    xSemaphoreTake(mutex_alarm, 0xffffffff);
+    xSemaphoreTake(mutex_alarm, portMAX_DELAY);
 
     /*  SEMAFORO SEZIONE CRITICA */
-    xSemaphoreTake(mutex_home, 0xffffffff);
+    xSemaphoreTake(mutex_home, portMAX_DELAY);
     home.alarm_sound = ON;
     xSemaphoreGive(mutex_home);
 
-    client.publish(topic_alarm_sound, "ALARM ON");
+    client.publish(topic_alarm_sound_text, "ALARM ON");
     digitalWrite(ALARM_LED, HIGH);
     digitalWrite(BUZZER, HIGH);
     delay(200);
     Serial.println("ALARM ON");
-
-    xSemaphoreGive(mutex_movement);
     
     /*  SOSPENSIONE ALLARME */
-    xSemaphoreTake(mutex_alarm, 0xffffffff);
+    xSemaphoreTake(mutex_alarm, portMAX_DELAY);
 
    /*  SEMAFORO SEZIONE CRITICA */
-    xSemaphoreTake(mutex_home, 0xffffffff);
+    xSemaphoreTake(mutex_home, portMAX_DELAY);
     home.alarm_sound = OFF;
     xSemaphoreGive(mutex_home);
 
-    client.publish(topic_alarm_sound, "ALARM OFF");
+    client.publish(topic_alarm_sound_text, "ALARM OFF");
     digitalWrite(BUZZER, LOW);
     digitalWrite(ALARM_LED, LOW);
     Serial.println("ALARM OFF");
-
-    xSemaphoreGive(mutex_movement);
 
   }  
 }
@@ -205,7 +176,7 @@ void TaskSlave(void *pvParameters) {
      if(digitalRead(TERMINALS[id]) == HIGH)
       {
       
-        xSemaphoreTake(mutex_home, 0xffffffff);
+        xSemaphoreTake(mutex_home, portMAX_DELAY);
         
         home.slave_state[id] = !home.slave_state[id];
         if (home.slave_state[id]) {
@@ -224,7 +195,7 @@ void TaskSlave(void *pvParameters) {
 
         if (home.slave_state[id] && home.alarm_mode && !home.alarm_sound) {
           xSemaphoreGive(mutex_home);
-          xSemaphoreGive(mutex_alarm);
+          xSemaphoreGiveFromISR(mutex_alarm, 0);
         } else {
           xSemaphoreGive(mutex_home);    
         }  
@@ -232,7 +203,33 @@ void TaskSlave(void *pvParameters) {
 
       vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
+}
+
+void TaskConnection(void *pvParameters) {
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
+  // Initialise the xLastWakeTime variable with the current time.
+  xLastWakeTime = xTaskGetTickCount();
   
+  Serial.print("Created Connection Task on core: ");
+  Serial.println(xPortGetCoreID());
+  
+  /* Connessione Wifi */
+  WifiConnection();
+
+  /* Connessione MQTT */
+  mqttConnection();
+  
+  while (1)
+  {
+    client.loop();
+    
+    if (!client.connected()) {
+      reconnect();
+    }
+    
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+  } 
 }
 
 void TaskMain(void *pvParameters) {
@@ -246,44 +243,67 @@ void TaskMain(void *pvParameters) {
 
   while (1)
   {  
-    if (client.connected() && ACK) {
-      if (strcmp(topic_id, topic_alarm) == 0)   /* Verifica disattivazione suono allarme */
+    if (client.connected() && ACK) {      
+      if (strcmp(topic_id, topic_alarm_sound) == 0)   /* Verifica disattivazione suono allarme */
       {
-        xSemaphoreTake(mutex_home, 0xffffffff);
+        xSemaphoreTake(mutex_home, portMAX_DELAY);
         if (home.alarm_mode && home.alarm_sound) {
           client.publish(topic_alarm_received, "sound disabled");
           xSemaphoreGive(mutex_home);
-          xSemaphoreGive(mutex_alarm);
+          xSemaphoreGiveFromISR(mutex_alarm, 0);
           Serial.println(topic_payload);
-        } else {
-          client.publish(topic_alarm_received, "sound is off or alarm is disabled");
+        } else if (!home.alarm_mode) {
+          client.publish(topic_alarm_received, "Alarm already disabled!");
+          xSemaphoreGive(mutex_home);
+        } else if (home.alarm_mode && !home.alarm_sound) {
+          client.publish(topic_alarm_received, "Sound is off!");
           xSemaphoreGive(mutex_home);
         }
         
-      } else if (strcmp(topic_id, topic_alarm_mode_on) == 0)  /* Verifica abilitazione allarme */
+      } 
+      else if (strcmp(topic_id, topic_alarm_mode_on) == 0)  /* Verifica abilitazione allarme */
       {
-        xSemaphoreTake(mutex_home, 0xffffffff);
+        xSemaphoreTake(mutex_home, portMAX_DELAY);
         if (!home.alarm_mode && !home.alarm_sound && home.open_slaves == 0)
         {
           home.alarm_mode = ENABLED;
           client.publish(topic_alarm_received, topic_payload);
           xSemaphoreGive(mutex_home);
           Serial.println(topic_payload);
-        } else
+        } else if (home.open_slaves)
         {    
-          client.publish(topic_alarm_received, "Check if slaves open or sound on or alarm already enabled");
+          client.publish(topic_alarm_received, "Slaves open, can't enable alarm");
+          xSemaphoreGive(mutex_home); 
+        } else if (home.alarm_mode)
+        {
+          client.publish(topic_alarm_received, "Alarm already enabled!");
           xSemaphoreGive(mutex_home);
-          Serial.println("Check if slaves open or sound on or alarm already enabled");  
+        } else if (home.alarm_sound)
+        {
+          client.publish(topic_alarm_received, "Alarm sound is ON!");
+          xSemaphoreGive(mutex_home);
         }
-        
-      } else if (strcmp(topic_id, topic_alarm_mode_off)  == 0)  /* Verifica disabilitazione allarme */
+      } 
+      else if (strcmp(topic_id, topic_alarm_mode_off)  == 0)  /* Verifica disabilitazione allarme */
       {
-        xSemaphoreTake(mutex_home, 0xffffffff);
+        xSemaphoreTake(mutex_home, portMAX_DELAY);
         home.alarm_mode = DISABLED;
         client.publish(topic_alarm_received, topic_payload);
         xSemaphoreGive(mutex_home);
         Serial.println(topic_payload);
-      } else{
+      } 
+      else if (strcmp(topic_id, topic_motion_detection_code)  == 0)  /* Verifica disabilitazione Timer allarme tramite Codice */
+      {
+        Serial.println(topic_payload);
+        TickType_t xRemainingTime;
+        xRemainingTime = xTimerGetExpiryTime(Timer_code) - xTaskGetTickCount();
+        Serial.print("Remaining time to activate alarm: ");
+        Serial.println(xRemainingTime);
+        xTimerStop(Timer_code, 0);
+        Serial.println("Timer stopped");
+        client.publish(topic_alarm_received, "Timer stopped");
+      } 
+      else {
         Serial.println("Message with no topic");
       }
       memset(topic_id, 0, sizeof(topic_id));
@@ -296,33 +316,59 @@ void TaskMain(void *pvParameters) {
   
 }
 
-void TaskMovement(void *pvParameters) {
-  TickType_t xLastWakeTime;
-  const TickType_t xFrequency = 1000 / portTICK_PERIOD_MS;
-  // Initialise the xLastWakeTime variable with the current time.
-  xLastWakeTime = xTaskGetTickCount();
-  
+void TaskMovementDetection(void *pvParameters) {
+
   Serial.print("Created movement detection Task on core: ");
   Serial.println(xPortGetCoreID());
-  
+
+  Ultrasonic ultrasonic(MOV_TRIG, MOV_ECHO);
+
+  xTimerStart(Timer_MovementDetection, 0);
+  int val;
+   
    while (1)
   {
-     /*  SOSPENSIONE TASK */
-    xSemaphoreTake(mutex_movement, 0xffffffff);
-    unsigned int distance;
-    while (uxSemaphoreGetCount(mutex_movement) == 0)
-    {
-      distance = sonar.ping_cm();
-      Serial.print("distance ");
-      Serial.print(distance);
-      Serial.println("cm");
-      vTaskDelay(1000);
+    xSemaphoreTake(mutex_movement, portMAX_DELAY);
+        
+    if (!first_read) {
+      val = ultrasonic.distanceRead();
+      if(val != 0){
+        last_distance = val;
+        curr_distance = val;
+        first_read = true;
+      }
+    } else {
+        last_distance = curr_distance;
+        val = ultrasonic.distanceRead(); 
+          if(val != 0){
+            curr_distance = val;
+            // Serial.print("last_distance: ");
+            // Serial.print(last_distance);
+            // Serial.println("cm");
+            // Serial.print("curr_distance: ");
+            // Serial.print(curr_distance);
+            // Serial.println("cm");
+            // Serial.print("Difference: ");
+            // Serial.print(curr_distance - last_distance);
+            // Serial.println("cm");
+            
+          }
+    
+     if ((curr_distance - last_distance) > 5 || (curr_distance - last_distance) < -5 ) {
+          Serial.println("MOVEMENT DETECTED");
+          xSemaphoreTake(mutex_home, portMAX_DELAY);
+          if (!home.alarm_sound)
+          {
+            xSemaphoreGive(mutex_home);
+            xTimerStart(Timer_code, 0);
+          } else {
+            xSemaphoreGive(mutex_home);
+          }
+        }    
     }
-     xSemaphoreTake(mutex_movement, 0xffffffff);
-  }
-  
+    
+  } 
 }
-
 
 void WifiConnection() {
   // Connect to Wi-Fi network with SSID and password
@@ -361,9 +407,10 @@ void reconnect() {
 }
 
 void subscriptions() {
-  client.subscribe(topic_alarm);
+  client.subscribe(topic_alarm_sound);
   client.subscribe(topic_alarm_mode_on);
-  client.subscribe(topic_alarm_mode_off);  
+  client.subscribe(topic_alarm_mode_off); 
+  client.subscribe(topic_motion_detection_code);  
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -396,12 +443,30 @@ void callback(char* topic, byte* payload, unsigned int length) {
   // whatever you want for this topic
 }
 
+void timer_callback(TimerHandle_t xTimer) {
+  if (xTimer == Timer_MovementDetection) 
+  {    
+    xSemaphoreTake(mutex_home, portMAX_DELAY);
+    if (home.alarm_mode && !home.alarm_sound) 
+    {
+      xSemaphoreGive(mutex_home);
+      xSemaphoreGive(mutex_movement);
+    } else {
+       xSemaphoreGive(mutex_home);
+    }
+  }
+  if (xTimer == Timer_code) 
+  {
+      xSemaphoreGiveFromISR(mutex_alarm, 0);
+  } 
+}
+
 void loop() {
   // put your main code here, to run repeatedly:
+}
 
-    /* DEBUG utilizzato per dimensione STACK dei task */
+    /* DEBUG utilizzato per dimensione STACK degli task */
 
     // Serial.print(pcTaskGetTaskName(NULL));
     // Serial.print(" uxTaskGetStackHighWaterMark = ")
     // Serial.println(uxTaskGetStackHighWaterMark(NULL));
-}
