@@ -48,6 +48,7 @@ extern const char* topic_motion_detection_code; // Pulsante disabilitazione time
 
 // HC-SR04 Distance sensor 
 #include <Ultrasonic.h>
+#define MAX_DISTANCE 5
 
 extern int curr_distance;
 extern int last_distance;

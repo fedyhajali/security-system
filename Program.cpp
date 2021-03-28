@@ -7,12 +7,10 @@ int BUZZER = 2;
 int ALARM_LED = 4; 
 int MOV_TRIG = 5;
 int MOV_ECHO = 17;
-
 const char* ssid     = "extender";
 const char* password = "freeRTOS";
-const char* mqtt_server = "broker.hivemq.com";
 const char* clientid = "DevESP32%MQTT_HOME%";
-*/
+
 
 int TERMINALS[] = {23, 22, 21, 15};
 int LED[] = {12, 32, 13, 14};
@@ -20,10 +18,13 @@ int BUZZER = 18;
 int ALARM_LED = 19; 
 int MOV_TRIG = 5;
 int MOV_ECHO = 4;
-
 const char* ssid     = "Vodafone-51555344";
 const char* password = "uejst7ccxbkkivm";
 const char* clientid = "DevESP32%MQTT_BUZZ%";
+*/
+
+
+const char* mqtt_server = "broker.hivemq.com";
 char topic_id[30]; //copia del topic in arrivo in subscription
 char topic_payload[60]; //copia del payload in arrivo in subscription
 boolean ACK = 0;
