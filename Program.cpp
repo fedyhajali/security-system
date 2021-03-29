@@ -1,17 +1,24 @@
 #include "structure.h"
 
-/*
-int TERMINALS[] = {13, 12, 14, 27};
-int LED[] = {23, 22, 21, 19};
+
+int TERMINALS[] = {32, 35, 34, 39};
+int LED[] = {13, 12, 14, 27};
+//int LED[] = {25, 26, 21, 19};
 int BUZZER = 2;
 int ALARM_LED = 4; 
-int MOV_TRIG = 5;
+int MOV_TRIG = 16;
 int MOV_ECHO = 17;
+int DISPLAY1 = 22;
+int DISPLAY2 = 23;
+int DISPLAY3 = 5;
+int DISPLAY4 = 18;
+int DISPLAY5 = 19;
+int DISPLAY6 = 21;
 const char* ssid     = "extender";
 const char* password = "freeRTOS";
 const char* clientid = "DevESP32%MQTT_HOME%";
 
-
+/*
 int TERMINALS[] = {23, 22, 21, 15};
 int LED[] = {12, 32, 13, 14};
 int BUZZER = 18;

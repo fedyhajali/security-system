@@ -22,7 +22,14 @@ extern int BUZZER;  // pin buzzer di allarme
 extern int ALARM_LED; // pin led di allarme
 extern int MOV_TRIG; // Output pin HC-SR04 sensore rilevamento movimenti
 extern int MOV_ECHO; // Input pin HC-SR04 sensore rilevamento movimenti
-
+// DISPLAY-1602
+#include <LiquidCrystal.h>
+extern int DISPLAY1;
+extern int DISPLAY2;
+extern int DISPLAY3;
+extern int DISPLAY4;
+extern int DISPLAY5;
+extern int DISPLAY6;
 
 // Load Wi-Fi library
 #include <WiFi.h>

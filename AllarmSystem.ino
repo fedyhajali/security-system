@@ -6,6 +6,7 @@ TaskHandle_t Handle_TaskAlarm;
 TaskHandle_t Handle_TaskMain;
 TaskHandle_t Handle_TaskConnection;
 TaskHandle_t Handle_TaskMovementDetection;
+TaskHandle_t Handle_TaskDisplay;
 
 // Timers
 
@@ -23,9 +24,12 @@ void TaskAlarm(void *pvParameters);
 void TaskMain(void *pvParameters);
 void TaskConnection(void *pvParameters);
 void TaskMovementDetection(void *pvParameters);
+void TaskDisplay(void *pvParameters);
 
 // shared struct resource
 struct home_state home;
+
+LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
 
 void setup()
 {
@@ -113,6 +117,17 @@ void setup()
       &Handle_TaskMovementDetection, /* Task handle to keep track of created task */
       1);
   delay(200);
+
+    /* Creazione task Display */
+  xTaskCreatePinnedToCore(
+      TaskDisplay,         /* Task function. */
+      "Display Task",     /* name of task. */
+      1000,                          /* Stack size of task */
+      NULL,                          /* parameter of the task */
+      10,                            /* priority of the task */
+      &Handle_TaskDisplay, /* Task handle to keep track of created task */
+      1);
+  delay(200);
 }
 
 void TaskAlarm(void *pvParameters)
@@ -131,7 +146,7 @@ void TaskAlarm(void *pvParameters)
     home.alarm_sound = ON;
     xSemaphoreGive(mutex_home);
 
-    client.publish(topic_alarm_sound_text, "ALARM ON");
+    client.publish(topic_alarm_sound_text, "ALARM SOUND ACTIVE");
     digitalWrite(ALARM_LED, HIGH);
     digitalWrite(BUZZER, HIGH);
     Serial.println("ALARM ON");
@@ -144,7 +159,7 @@ void TaskAlarm(void *pvParameters)
     home.alarm_sound = OFF;
     xSemaphoreGive(mutex_home);
 
-    client.publish(topic_alarm_sound_text, "ALARM OFF");
+    client.publish(topic_alarm_sound_text, "ALARM SOUND OFF");
     digitalWrite(BUZZER, LOW);
     digitalWrite(ALARM_LED, LOW);
     Serial.println("ALARM OFF");
@@ -197,7 +212,7 @@ void TaskSlave(void *pvParameters)
       if (home.slave_state[id] && home.alarm_mode && !home.alarm_sound)
       {
         xSemaphoreGive(mutex_home);
-        xSemaphoreGiveFromISR(mutex_alarm);
+        xSemaphoreGiveFromISR(mutex_alarm, 0);
       }
       else
       {
@@ -250,7 +265,7 @@ void TaskMain(void *pvParameters)
 
   while (1)
   {
-    if (client.connected() && ACK)
+    if (client.connected() && ACK)   /* ACK => Nuovo messaggio */
     {
       if (strcmp(topic_id, topic_alarm_sound) == 0) /* Verifica disattivazione suono allarme */
       {
@@ -259,7 +274,7 @@ void TaskMain(void *pvParameters)
         {
           client.publish(topic_alarm_received, "sound disabled");
           xSemaphoreGive(mutex_home);
-          xSemaphoreGiveFromISR(mutex_alarm);
+          xSemaphoreGiveFromISR(mutex_alarm, 0);
           Serial.println(topic_payload);
         }
         else if (!home.alarm_mode)
@@ -396,6 +411,40 @@ void TaskMovementDetection(void *pvParameters)
   }
 }
 
+void TaskDisplay(void *pvParameters) {
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = 1000 / portTICK_PERIOD_MS;
+  // Initialise the xLastWakeTime variable with the current time.
+  xLastWakeTime = xTaskGetTickCount();
+
+  Serial.print("Created Task Display on core: ");
+  Serial.println(xPortGetCoreID());
+
+  LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
+
+  lcd.begin(16, 2);
+  
+  while (1)
+  {
+    
+    xSemaphoreTake(mutex_home, portMAX_DELAY); 
+    
+    lcd.setCursor(0, 0); 
+    (home.alarm_mode) ? lcd.print("ALARM: ON") : lcd.print("ALARM: OFF");
+    lcd.setCursor(0, 1);
+    char value[5];
+    snprintf(value, sizeof(value), "%d", home.open_slaves);
+    lcd.print("OPEN SLAVES: ");
+    lcd.print(value);
+  
+    xSemaphoreGive(mutex_home);       
+    
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+  }
+  
+
+}
+
 void WifiConnection()
 {
   // Connect to Wi-Fi network with SSID and password
@@ -481,8 +530,6 @@ void callback(char *topic, byte *payload, unsigned int length)
   topic_payload[length] = 0;
   ACK = 1;
   Serial.println();
-
-  // whatever you want for this topic
 }
 
 void timer_callback(TimerHandle_t xTimer)
@@ -493,7 +540,7 @@ void timer_callback(TimerHandle_t xTimer)
   }
   if (xTimer == Timer_code)
   {
-    xSemaphoreGiveFromISR(mutex_alarm);
+    xSemaphoreGiveFromISR(mutex_alarm, 0);
   }
 }
 
@@ -502,7 +549,7 @@ void loop()
   // put your main code here, to run repeatedly:
 }
 
-/* DEBUG utilizzato per dimensione STACK degli task */
+/* DEBUG dimensione STACK dei task */
 
 // Serial.print(pcTaskGetTaskName(NULL));
 // Serial.print(" uxTaskGetStackHighWaterMark = ")
