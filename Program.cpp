@@ -1,6 +1,6 @@
 #include "structure.h"
 
-
+/*
 int TERMINALS[] = {32, 35, 34, 39};
 int LED[] = {13, 12, 14, 27};
 //int LED[] = {25, 26, 21, 19};
@@ -18,7 +18,7 @@ const char* ssid     = "extender";
 const char* password = "freeRTOS";
 const char* clientid = "DevESP32%MQTT_HOME%";
 
-/*
+
 int TERMINALS[] = {23, 22, 21, 15};
 int LED[] = {12, 32, 13, 14};
 int BUZZER = 18;
