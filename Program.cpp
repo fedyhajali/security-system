@@ -48,5 +48,10 @@ int curr_distance;
 int last_distance;
 bool first_read = false;
 
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 7200;
+
+
 WiFiClient espClient;
 PubSubClient client(mqtt_server, 1883, callback, espClient);

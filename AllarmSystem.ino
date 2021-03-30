@@ -89,7 +89,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskConnection,         /* Task function. */
       "Connection Task",      /* name of task. */
-      2300,                   /* Stack size of task */
+      3000,                   /* Stack size of task */
       NULL,                   /* parameter of the task */
       10,                     /* priority of the task */
       &Handle_TaskConnection, /* Task handle to keep track of created task */
@@ -227,7 +227,7 @@ void TaskSlave(void *pvParameters)
 void TaskConnection(void *pvParameters)
 {
   TickType_t xLastWakeTime;
-  const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
+  const TickType_t xFrequency = 1000 / portTICK_PERIOD_MS;
   // Initialise the xLastWakeTime variable with the current time.
   xLastWakeTime = xTaskGetTickCount();
 
@@ -240,6 +240,8 @@ void TaskConnection(void *pvParameters)
   /* Connessione MQTT */
   mqttConnection();
 
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  
   while (1)
   {
     client.loop();
@@ -249,8 +251,21 @@ void TaskConnection(void *pvParameters)
       reconnect();
     }
 
+    printLocalTime();
+
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
+}
+
+void printLocalTime(){
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+
+  Serial.println();
 }
 
 void TaskMain(void *pvParameters)
