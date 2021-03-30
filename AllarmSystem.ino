@@ -38,6 +38,8 @@ void setup()
   pinMode(BUZZER, OUTPUT);
   pinMode(ALARM_LED, OUTPUT);
 
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
   /* Inizializzazione struttura e semafori*/
   for (int i = 0; i < SLAVES; i++)
   {
@@ -45,7 +47,7 @@ void setup()
     pinMode(TERMINALS[i], INPUT);
     pinMode(LED[i], OUTPUT);
   }
-  home.alarm_mode = ENABLED;
+  home.alarm_mode = DISABLED;
   home.alarm_sound = OFF;
   home.open_slaves = 0;
   mutex_home = xSemaphoreCreateCounting(1, 1);
@@ -78,7 +80,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskAlarm,         /* Task function. */
       "Alarm Task",      /* name of task. */
-      2000,              /* Stack size of task */
+      2500,              /* Stack size of task */
       NULL,              /* parameter of the task */
       15,                /* priority of the task */
       &Handle_TaskAlarm, /* Task handle to keep track of created task */
@@ -89,7 +91,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskConnection,         /* Task function. */
       "Connection Task",      /* name of task. */
-      3000,                   /* Stack size of task */
+      2500,                   /* Stack size of task */
       NULL,                   /* parameter of the task */
       10,                     /* priority of the task */
       &Handle_TaskConnection, /* Task handle to keep track of created task */
@@ -200,14 +202,21 @@ void TaskSlave(void *pvParameters)
       {
         home.open_slaves--;
       }
-      char value[5];
+      char value[4];
       snprintf(value, sizeof(value), "%d", home.open_slaves);
       client.publish(topic_open_slaves, value);
-      client.publish(topic_slaves, ((home.slave_state[id]) ? "OPEN" : "CLOSED"));
+      struct tm time = getDateTime();
+      char message[40];
+      if (home.slave_state[id])
+      {
+        strftime(message, sizeof(message), "%H:%M \n OPEN", &time);  
+      } else {
+        strftime(message, sizeof(message), "%H:%M \n CLOSE", &time);        
+      }
+      
+      client.publish(topic_slaves, message);
+      Serial.println(message);    
       digitalWrite(LED[id], home.slave_state[id]);
-      Serial.print("Window ");
-      Serial.print(id);
-      Serial.print((home.slave_state[id]) ? " OPEN " : " CLOSED ");
 
       if (home.slave_state[id] && home.alarm_mode && !home.alarm_sound)
       {
@@ -239,8 +248,6 @@ void TaskConnection(void *pvParameters)
 
   /* Connessione MQTT */
   mqttConnection();
-
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   
   while (1)
   {
@@ -251,21 +258,18 @@ void TaskConnection(void *pvParameters)
       reconnect();
     }
 
-    printLocalTime();
-
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
 }
 
-void printLocalTime(){
+struct tm getDateTime(){
   struct tm timeinfo;
+  timeinfo = {};
   if(!getLocalTime(&timeinfo)){
     Serial.println("Failed to obtain time");
-    return;
   }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 
-  Serial.println();
+  return timeinfo;  
 }
 
 void TaskMain(void *pvParameters)
@@ -445,13 +449,30 @@ void TaskDisplay(void *pvParameters) {
     xSemaphoreTake(mutex_home, portMAX_DELAY); 
     
     lcd.setCursor(0, 0); 
-    (home.alarm_mode) ? lcd.print("ALARM: ON") : lcd.print("ALARM: OFF");
-    lcd.setCursor(0, 1);
-    char value[5];
-    snprintf(value, sizeof(value), "%d", home.open_slaves);
-    lcd.print("OPEN SLAVES: ");
-    lcd.print(value);
-  
+    if (home.alarm_mode && !home.alarm_sound)
+    {
+      lcd.clear();
+      lcd.print("ALARM: ON");
+      lcd.setCursor(0, 1);
+      char value[5];
+      snprintf(value, sizeof(value), "%d", home.open_slaves);
+      lcd.print("OPEN SLAVES: ");
+      lcd.print(value);
+    } else if (!home.alarm_mode && !home.alarm_sound)
+    {
+      lcd.print("ALARM: OFF");
+      lcd.setCursor(0, 1);
+      char value[5];
+      snprintf(value, sizeof(value), "%d", home.open_slaves);
+      lcd.print("OPEN SLAVES: ");
+      lcd.print(value); 
+    } else if (home.alarm_sound)
+    {
+      lcd.print("** ATTENTION **");
+      lcd.setCursor(0, 1);
+      lcd.print("ALARM SOUND ON!!");
+    }
+      
     xSemaphoreGive(mutex_home);       
     
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
