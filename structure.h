@@ -67,6 +67,11 @@ extern const char* ntpServer;
 extern const long  gmtOffset_sec;
 extern const int   daylightOffset_sec;
 
+//#include <IRremote.h>
+#define PASS_SIZE 5
+//extern int IR_Recv; //IR Receiver Pin
+extern bool ins_password; 
+
 extern void callback(char* topic, byte* payload, unsigned int length);
 
 extern WiFiClient espClient;

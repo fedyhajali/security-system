@@ -52,6 +52,7 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
+bool ins_password = false;
 
 WiFiClient espClient;
 PubSubClient client(mqtt_server, 1883, callback, espClient);

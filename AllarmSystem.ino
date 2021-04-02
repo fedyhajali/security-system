@@ -1,5 +1,9 @@
 #include "structure.h"
 
+#include <IRremote.h>
+
+int IR_Recv = 15;
+
 // TaskHandles
 TaskHandle_t Handle_TaskSlave[SLAVES];
 TaskHandle_t Handle_TaskAlarm;
@@ -7,9 +11,9 @@ TaskHandle_t Handle_TaskMain;
 TaskHandle_t Handle_TaskConnection;
 TaskHandle_t Handle_TaskMovementDetection;
 TaskHandle_t Handle_TaskDisplay;
+TaskHandle_t Handle_TaskPassword;
 
 // Timers
-
 TimerHandle_t Timer_MovementDetection;
 TimerHandle_t Timer_code;
 
@@ -17,6 +21,7 @@ TimerHandle_t Timer_code;
 SemaphoreHandle_t mutex_home;
 SemaphoreHandle_t mutex_alarm;
 SemaphoreHandle_t mutex_movement;
+SemaphoreHandle_t mutex_password;
 
 //Task Definitions
 void TaskSlave(void *pvParameters);
@@ -25,6 +30,7 @@ void TaskMain(void *pvParameters);
 void TaskConnection(void *pvParameters);
 void TaskMovementDetection(void *pvParameters);
 void TaskDisplay(void *pvParameters);
+void TaskPassword(void *pvParameters);
 
 // shared struct resource
 struct home_state home;
@@ -53,9 +59,12 @@ void setup()
   mutex_home = xSemaphoreCreateCounting(1, 1);
   mutex_alarm = xSemaphoreCreateCounting(1, 0);
   mutex_movement = xSemaphoreCreateCounting(1, 0);
+  mutex_password = xSemaphoreCreateCounting(1, 1);
 
   Timer_MovementDetection = xTimerCreate("Movement sensor Timer", pdMS_TO_TICKS(2000), pdTRUE, (void *)0, timer_callback);
-  Timer_code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(10000), pdFALSE, (void *)1, timer_callback);
+  Timer_code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(20000), pdFALSE, (void *)1, timer_callback);
+
+  lcd.begin(16, 2);
 
   Serial.println("Creating slave tasks..");
   delay(200);
@@ -120,13 +129,13 @@ void setup()
       1);
   delay(200);
 
-    /* Creazione task Display */
+  /* Creazione task Display */
   xTaskCreatePinnedToCore(
       TaskDisplay,         /* Task function. */
-      "Display Task",     /* name of task. */
-      1000,                          /* Stack size of task */
-      NULL,                          /* parameter of the task */
-      10,                            /* priority of the task */
+      "Display Task",      /* name of task. */
+      1000,                /* Stack size of task */
+      NULL,                /* parameter of the task */
+      10,                  /* priority of the task */
       &Handle_TaskDisplay, /* Task handle to keep track of created task */
       1);
   delay(200);
@@ -209,13 +218,15 @@ void TaskSlave(void *pvParameters)
       char message[40];
       if (home.slave_state[id])
       {
-        strftime(message, sizeof(message), "%H:%M \n OPEN", &time);  
-      } else {
-        strftime(message, sizeof(message), "%H:%M \n CLOSE", &time);        
+        strftime(message, sizeof(message), "%H:%M \n OPEN", &time);
       }
-      
+      else
+      {
+        strftime(message, sizeof(message), "%H:%M \n CLOSE", &time);
+      }
+
       client.publish(topic_slaves, message);
-      Serial.println(message);    
+      Serial.println(message);
       digitalWrite(LED[id], home.slave_state[id]);
 
       if (home.slave_state[id] && home.alarm_mode && !home.alarm_sound)
@@ -248,7 +259,7 @@ void TaskConnection(void *pvParameters)
 
   /* Connessione MQTT */
   mqttConnection();
-  
+
   while (1)
   {
     client.loop();
@@ -260,16 +271,6 @@ void TaskConnection(void *pvParameters)
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
-}
-
-struct tm getDateTime(){
-  struct tm timeinfo;
-  timeinfo = {};
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Failed to obtain time");
-  }
-
-  return timeinfo;  
 }
 
 void TaskMain(void *pvParameters)
@@ -284,27 +285,29 @@ void TaskMain(void *pvParameters)
 
   while (1)
   {
-    if (client.connected() && ACK)   /* ACK => Nuovo messaggio */
+    if (client.connected() && ACK) /* ACK => Nuovo messaggio */
     {
       if (strcmp(topic_id, topic_alarm_sound) == 0) /* Verifica disattivazione suono allarme */
       {
         xSemaphoreTake(mutex_home, portMAX_DELAY);
         if (home.alarm_mode && home.alarm_sound)
         {
-          client.publish(topic_alarm_received, "sound disabled");
+          home.alarm_mode = DISABLED;
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, "Sound and alarm disabled");
           xSemaphoreGiveFromISR(mutex_alarm, 0);
+          xTimerStop(Timer_MovementDetection, portMAX_DELAY);
           Serial.println(topic_payload);
         }
         else if (!home.alarm_mode)
         {
-          client.publish(topic_alarm_received, "Alarm already disabled!");
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, "Alarm already disabled!");
         }
         else if (home.alarm_mode && !home.alarm_sound)
         {
-          client.publish(topic_alarm_received, "Sound is off!");
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, "Sound is off!");
         }
       }
       else if (strcmp(topic_id, topic_alarm_mode_on) == 0) /* Verifica abilitazione allarme */
@@ -313,33 +316,33 @@ void TaskMain(void *pvParameters)
         if (!home.alarm_mode && !home.alarm_sound && home.open_slaves == 0)
         {
           home.alarm_mode = ENABLED;
-          client.publish(topic_alarm_received, topic_payload);
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, topic_payload);
           Serial.println(topic_payload);
           xTimerStart(Timer_MovementDetection, 0);
         }
         else if (home.open_slaves)
         {
-          client.publish(topic_alarm_received, "Slaves open, can't enable alarm");
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, "Slaves open, can't enable alarm");
         }
         else if (home.alarm_mode)
         {
-          client.publish(topic_alarm_received, "Alarm already enabled!");
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, "Alarm already enabled!");
         }
         else if (home.alarm_sound)
         {
-          client.publish(topic_alarm_received, "Alarm sound is ON!");
           xSemaphoreGive(mutex_home);
+          client.publish(topic_alarm_received, "Alarm sound is ON!");
         }
       }
       else if (strcmp(topic_id, topic_alarm_mode_off) == 0) /* Verifica disabilitazione allarme */
       {
         xSemaphoreTake(mutex_home, portMAX_DELAY);
         home.alarm_mode = DISABLED;
-        client.publish(topic_alarm_received, topic_payload);
         xSemaphoreGive(mutex_home);
+        client.publish(topic_alarm_received, topic_payload);
         xTimerStop(Timer_MovementDetection, portMAX_DELAY);
         Serial.println(topic_payload);
       }
@@ -355,8 +358,8 @@ void TaskMain(void *pvParameters)
         client.publish(topic_alarm_received, "Timer stopped");
         xSemaphoreTake(mutex_home, portMAX_DELAY);
         home.alarm_mode = DISABLED;
-        client.publish(topic_alarm_received, topic_payload);
         xSemaphoreGive(mutex_home);
+        client.publish(topic_alarm_received, topic_payload);
         xTimerStop(Timer_MovementDetection, portMAX_DELAY);
       }
       else
@@ -414,6 +417,18 @@ void TaskMovementDetection(void *pvParameters)
           if (!home.alarm_sound)
           {
             xSemaphoreGive(mutex_home);
+            xSemaphoreTake(mutex_password, portMAX_DELAY);
+            ins_password = true;
+            xSemaphoreGive(mutex_password);
+            /* Creazione task inserimento codice*/
+            xTaskCreate(
+                TaskPassword,        /* Task function. */
+                "Password Task",     /* name of task. */
+                3000,                /* Stack size of task */
+                NULL,                /* parameter of the task */
+                10,                  /* priority of the task */
+                &Handle_TaskPassword /* Task handle to keep track of created task */
+            );
             xTimerStart(Timer_code, 0);
           }
           else
@@ -430,7 +445,8 @@ void TaskMovementDetection(void *pvParameters)
   }
 }
 
-void TaskDisplay(void *pvParameters) {
+void TaskDisplay(void *pvParameters)
+{
   TickType_t xLastWakeTime;
   const TickType_t xFrequency = 1000 / portTICK_PERIOD_MS;
   // Initialise the xLastWakeTime variable with the current time.
@@ -439,16 +455,22 @@ void TaskDisplay(void *pvParameters) {
   Serial.print("Created Task Display on core: ");
   Serial.println(xPortGetCoreID());
 
-  LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
-
-  lcd.begin(16, 2);
-  
   while (1)
   {
-    
-    xSemaphoreTake(mutex_home, portMAX_DELAY); 
-    
-    lcd.setCursor(0, 0); 
+    xSemaphoreTake(mutex_password, portMAX_DELAY);
+    if (ins_password)
+    {
+      xSemaphoreGive(mutex_password);
+      vTaskSuspend(NULL);
+    }
+    else
+    {
+      xSemaphoreGive(mutex_password);
+    }
+
+    xSemaphoreTake(mutex_home, portMAX_DELAY);
+
+    lcd.setCursor(0, 0);
     if (home.alarm_mode && !home.alarm_sound)
     {
       lcd.clear();
@@ -458,27 +480,221 @@ void TaskDisplay(void *pvParameters) {
       snprintf(value, sizeof(value), "%d", home.open_slaves);
       lcd.print("OPEN SLAVES: ");
       lcd.print(value);
-    } else if (!home.alarm_mode && !home.alarm_sound)
+    }
+    else if (!home.alarm_mode && !home.alarm_sound)
     {
+      lcd.clear();
       lcd.print("ALARM: OFF");
       lcd.setCursor(0, 1);
       char value[5];
       snprintf(value, sizeof(value), "%d", home.open_slaves);
       lcd.print("OPEN SLAVES: ");
-      lcd.print(value); 
-    } else if (home.alarm_sound)
+      lcd.print(value);
+    }
+    else if (home.alarm_sound)
     {
       lcd.print("** ATTENTION **");
       lcd.setCursor(0, 1);
       lcd.print("ALARM SOUND ON!!");
     }
-      
-    xSemaphoreGive(mutex_home);       
-    
+
+    xSemaphoreGive(mutex_home);
+
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
-  
+}
 
+void TaskPassword(void *pvParameters)
+{
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = 700 / portTICK_PERIOD_MS;
+  // Initialise the xLastWakeTime variable with the current time.
+  xLastWakeTime = xTaskGetTickCount();
+
+  Serial.print("Created Password Task on core: ");
+  Serial.println(xPortGetCoreID());
+
+  IrReceiver.begin(IR_Recv, DISABLE_LED_FEEDBACK);
+  char real_password[] = "0000";
+  char try_password[PASS_SIZE];
+  int i = 0;
+  bool ok = false;
+  bool okok = false;
+
+  lcd.setCursor(0, 0);
+  lcd.clear();
+  lcd.print("INSERT CODE:");
+  lcd.setCursor(0, 1);
+  while (1)
+  {
+    //decodes the infrared input
+    if (IrReceiver.decode())
+    {
+      //Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
+      if (i < PASS_SIZE - 1)
+      {
+        switch (IrReceiver.decodedIRData.decodedRawData)
+        {
+        case 0xE916FF00: // 0 button
+          Serial.print("0");
+          lcd.print("0");
+          try_password[i] = '0';
+          i++;
+          // Serial.print("*");
+          break;
+        case 0xF30CFF00: // 1 button
+          Serial.print("1");
+          lcd.print("1");
+          try_password[i] = '1';
+          i++;
+          // Serial.print("*");
+          break;
+        case 0xE718FF00: // 2 button
+          Serial.print("2");
+          lcd.print("2");
+          try_password[i] = '2';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xA15EFF00: // 3 button
+          Serial.print("3");
+          lcd.print("3");
+          try_password[i] = '3';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xF708FF00: // 4 button
+          Serial.print("4");
+          lcd.print("4");
+          try_password[i] = '4';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xE31CFF00: // 5 button
+          Serial.print("5");
+          lcd.print("5");
+          try_password[i] = '5';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xA55AFF00: // 6 button
+          Serial.print("6");
+          lcd.print("6");
+          try_password[i] = '6';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xBD42FF00: // 7 button
+          Serial.print("7");
+          lcd.print("7");
+          try_password[i] = '7';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xAD52FF00: // 8 button
+          Serial.print("8");
+          lcd.print("8");
+          try_password[i] = '8';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xB54AFF00: // 9 button
+          Serial.print("9");
+          lcd.print("9");
+          try_password[i] = '9';
+          // Serial.print("*");
+          i++;
+          break;
+        case 0xBC43FF00: // RESET button
+          Serial.println();
+          Serial.println("RESET");
+          lcd.clear();
+          lcd.println("RESET");
+          memset(try_password, 0, sizeof(try_password));
+          i = 0;
+          //Serial.println(try_password);
+          break;
+        default:
+          Serial.println("input not valid");
+        }
+      }
+      else if (i == PASS_SIZE - 1)
+      {
+        switch (IrReceiver.decodedIRData.decodedRawData)
+        {
+        case 0xF609FF00: // OK button
+          Serial.println();
+          Serial.println("OK");
+          ok = true;
+          break;
+        case 0xBC43FF00: // RESET button
+          Serial.println();
+          Serial.println("RESET");
+          lcd.setCursor(0, 0);
+          lcd.clear();
+          lcd.println("RESET");
+          vTaskDelay(pdMS_TO_TICKS(500));
+          lcd.clear();
+          memset(try_password, 0, sizeof(try_password));
+          i = 0;
+          //Serial.println(try_password);
+          break;
+        default:
+          Serial.println();
+          Serial.println("Error password size, please check or reset.");
+          lcd.println("Error size");
+        }
+      }
+      IrReceiver.resume(); // Receives the next value from the button you press
+    }
+
+    if (ok)
+    {
+      Serial.print("Password: ");
+      Serial.println(try_password);
+      Serial.println("Break dal while");
+      break; // Break dal while
+    }
+
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+  }
+
+  Serial.println("Check password..");
+
+  /* CHECK PASSWORD MATCHING */
+  if (strcmp(try_password, real_password) == 0)
+  {
+    Serial.println("PASSWORD OK!");
+    lcd.setCursor(0, 0);
+    lcd.clear();
+    lcd.println("PASSWORD OK");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    TickType_t xRemainingTime;
+    xRemainingTime = xTimerGetExpiryTime(Timer_code) - xTaskGetTickCount();
+    Serial.print("Remaining time to activate alarm: ");
+    Serial.println(xRemainingTime);
+    xTimerStop(Timer_code, 0);
+    xTimerStop(Timer_MovementDetection, portMAX_DELAY);
+    Serial.println("Timer stopped");
+    xSemaphoreTake(mutex_home, portMAX_DELAY);
+    home.alarm_mode = DISABLED;
+    client.publish(topic_alarm_received, "Timer stopped and Alarm disabled");
+    xSemaphoreGive(mutex_home);
+    xSemaphoreTake(mutex_password, portMAX_DELAY);
+    ins_password = false;
+    xSemaphoreGive(mutex_password);
+    vTaskResume(Handle_TaskDisplay);
+    vTaskDelete(NULL);
+  }
+  else
+  {
+    Serial.println("PASSWORD FAIL!");
+    lcd.setCursor(0, 0);
+    lcd.clear();
+    lcd.println("PASSWORD FAIL");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskSuspend(NULL);
+  }
 }
 
 void WifiConnection()
@@ -533,6 +749,17 @@ void subscriptions()
   client.subscribe(topic_alarm_mode_off);
   client.subscribe(topic_motion_detection_code);
 }
+struct tm getDateTime()
+{
+  struct tm timeinfo;
+  timeinfo = {};
+  if (!getLocalTime(&timeinfo))
+  {
+    Serial.println("Failed to obtain time");
+  }
+
+  return timeinfo;
+}
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
@@ -576,6 +803,11 @@ void timer_callback(TimerHandle_t xTimer)
   }
   if (xTimer == Timer_code)
   {
+    xSemaphoreTake(mutex_password, portMAX_DELAY);
+    ins_password = false;
+    xSemaphoreGive(mutex_password);
+    vTaskResume(Handle_TaskDisplay);
+    vTaskDelete(Handle_TaskPassword);
     xSemaphoreGiveFromISR(mutex_alarm, 0);
   }
 }
