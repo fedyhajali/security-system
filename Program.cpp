@@ -3,7 +3,6 @@
 /*
 int TERMINALS[] = {32, 35, 34, 39};
 int LED[] = {13, 12, 14, 27};
-//int LED[] = {25, 26, 21, 19};
 int BUZZER = 2;
 int ALARM_LED = 4; 
 int MOV_TRIG = 16;
@@ -52,7 +51,11 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
-bool ins_password = false;
+int IR_Recv = 15;
+char real_password[PASS_SIZE] = "0000";
+char try_password[PASS_SIZE];
+bool insert_password = false;
+bool exit_while = false;
 
 WiFiClient espClient;
 PubSubClient client(mqtt_server, 1883, callback, espClient);

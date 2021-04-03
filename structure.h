@@ -34,7 +34,7 @@ extern char topic_id[30];   // copia del topic in arrivo
 extern char topic_payload[60];   // copia del payload in arrivo
 extern boolean ACK;   // true se c'è un messaggio di ack da mandare
 
-
+// MQTT Topics
 extern const char* topic_alarm_mode_on; // Pulsante attivazione allarme 
 extern const char* topic_alarm_mode_off;  // Pulsante disattivazione allarme
 extern const char* topic_alarm_sound;  // Pulsante disattivazione suono allarme
@@ -62,18 +62,19 @@ extern int last_distance;
 extern bool first_read;
 
 #include "time.h"
-
 extern const char* ntpServer;
 extern const long  gmtOffset_sec;
 extern const int   daylightOffset_sec;
 
-//#include <IRremote.h>
+
 #define PASS_SIZE 5
-//extern int IR_Recv; //IR Receiver Pin
-extern bool ins_password; 
+extern int IR_Recv;
+extern bool insert_password; 
+extern char real_password[PASS_SIZE];
+extern char try_password[PASS_SIZE];
+extern bool exit_while;
 
 extern void callback(char* topic, byte* payload, unsigned int length);
-
 extern WiFiClient espClient;
 extern PubSubClient client;
 
