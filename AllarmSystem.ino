@@ -1,4 +1,5 @@
 #include "structure.h"
+#include <IRremote.h>
 
 // TaskHandles
 TaskHandle_t Handle_TaskSlave[SLAVES];
@@ -36,14 +37,12 @@ struct home_state home;
 /* Inizializzazione Diplay */
 LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
 
-#include <IRremote.h>
-
 void setup()
 {
 
   Serial.begin(115200);
   pinMode(BUZZER, OUTPUT);
-  pinMode(ALARM_LED, OUTPUT);
+  pinMode(ALARMLED, OUTPUT);
 
   /* Inizializzazione Time Library */
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -66,19 +65,25 @@ void setup()
   mutex_password = xSemaphoreCreateCounting(1, 1);
   mutex_lcd = xSemaphoreCreateCounting(1, 1);
 
+  // MISRA C R. 11.6
   /* Creazione Software Timers*/
-  Timer_MovementDetection = xTimerCreate("Movement sensor Timer", pdMS_TO_TICKS(2000), pdTRUE, (void *)0, timer_callback);
-  Timer_Code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(20000), pdFALSE, (void *)1, timer_callback);
-  Timer_Alarm = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(60000), pdFALSE, (void *)2, timer_callback);
+  Timer_MovementDetection = xTimerCreate("Movement sensor Timer", pdMS_TO_TICKS(2000), pdTRUE, NULL, timer_callback);
+  Timer_Code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(20000), pdFALSE, NULL, timer_callback);
+  Timer_Alarm = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(60000), pdFALSE, NULL, timer_callback);
 
   Serial.println("Creating slave tasks..");
   delay(200);
 
+  // MISRA C Violazione R. 11.6
   /* Creazione N task di slave */
   for (int i = 0; i < SLAVES; i++)
   {
     char taskName[15];
-    snprintf(taskName, sizeof(taskName), "Task Slave %d", i);
+    int ret = snprintf(taskName, sizeof(taskName), "Task Slave %d", i);
+    if (ret < 0) // MISRA C R.17.7
+    {
+      Serial.println("Error snprintf");
+    }
 
     xTaskCreate(
         TaskSlave,
@@ -164,7 +169,7 @@ void TaskAlarm(void *pvParameters)
 
     client.publish(topic_alarm_sound_text, "ALARM SOUND ACTIVE");
     xTimerStart(Timer_Alarm, 0);
-    digitalWrite(ALARM_LED, HIGH);
+    digitalWrite(ALARMLED, HIGH);
     digitalWrite(BUZZER, HIGH);
     Serial.println("ALARM ON");
 
@@ -178,7 +183,7 @@ void TaskAlarm(void *pvParameters)
 
     client.publish(topic_alarm_sound_text, "ALARM SOUND OFF");
     digitalWrite(BUZZER, LOW);
-    digitalWrite(ALARM_LED, LOW);
+    digitalWrite(ALARMLED, LOW);
     Serial.println("ALARM OFF");
   }
 }
@@ -190,6 +195,7 @@ void TaskSlave(void *pvParameters)
   // Initialise the xLastWakeTime variable with the current time.
   xLastWakeTime = xTaskGetTickCount();
 
+  // MISRA C R. 11.6 VIOLAZIONE
   /* ID SLAVE */
   uint32_t id = (uint32_t)pvParameters;
 
@@ -199,7 +205,11 @@ void TaskSlave(void *pvParameters)
   Serial.println(xPortGetCoreID());
 
   char topic_slaves[24]; // Salvo le stringhe dei topic di ogni slave
-  snprintf(topic_slaves, 24, "KfZ91%%%%7BM@/Window/%d", id);
+  int ret = snprintf(topic_slaves, 24, "KfZ91%%%%7BM@/Window/%d", id);
+  if (ret < 0) // MISRA C R.17.7 OK
+  {
+    Serial.println("Error snprintf");
+  }
 
   while (1)
   {
@@ -218,17 +228,29 @@ void TaskSlave(void *pvParameters)
         home.open_slaves--;
       }
       char value[4];
-      snprintf(value, sizeof(value), "%d", home.open_slaves);
+      int ret = snprintf(value, sizeof(value), "%d", home.open_slaves);
+      if (ret < 0) // MISRA C R.17.7 OK
+      {
+        Serial.println("Error snprintf");
+      }
       client.publish(topic_open_slaves, value);
       struct tm time = getDateTime();
       char message[40];
       if (home.slave_state[id])
       {
-        strftime(message, sizeof(message), "%H:%M \n OPEN", &time);
+        int return_v = strftime(message, sizeof(message), "%H:%M \n OPEN", &time);
+        if (return_v == 0) // MISRA C R.17.7 OK
+        {
+          Serial.println("Error strftime");
+        }
       }
       else
       {
-        strftime(message, sizeof(message), "%H:%M \n CLOSE", &time);
+        int return_v = strftime(message, sizeof(message), "%H:%M \n CLOSE", &time);
+        if (return_v == 0) // MISRA C R.17.7 OK
+        {
+          Serial.println("Error strftime");
+        }
       }
 
       client.publish(topic_slaves, message);
@@ -337,11 +359,16 @@ void TaskMain(void *pvParameters)
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
         }
+        else // MISRA C R. 15.7 OK
+        {
+          // TODO
+        }
       }
       else if (strcmp(topic_id, topic_alarm_mode_on) == 0) /* Verifica abilitazione allarme */
       {
         xSemaphoreTake(mutex_home, portMAX_DELAY);
-        if (!home.alarm_mode && !home.alarm_sound && home.open_slaves == 0)
+        // MISRA C R. 12.1 OK
+        if (!home.alarm_mode && !home.alarm_sound && (home.open_slaves == 0))
         {
           home.alarm_mode = ENABLED;
           xSemaphoreGive(mutex_home);
@@ -354,7 +381,7 @@ void TaskMain(void *pvParameters)
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
         }
-        else if (home.open_slaves)
+        else if (home.open_slaves > 0) // MISRA C R. 14.4 OK
         {
           xSemaphoreGive(mutex_home);
           client.publish(topic_alarm_received, "Slaves open, can't enable alarm");
@@ -392,6 +419,10 @@ void TaskMain(void *pvParameters)
           lcd.print("is ON!");
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
+        }
+        else // MISRA C R. 15.7 OK
+        {
+          // TODO
         }
       }
       else if (strcmp(topic_id, topic_alarm_mode_off) == 0) /* Verifica disabilitazione allarme */
@@ -437,11 +468,15 @@ void TaskMain(void *pvParameters)
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
         }
+        else // MISRA C R. 15.7 OK
+        {
+          // TODO
+        }
       }
       else if (strcmp(topic_id, topic_motion_detection_code) == 0) /* Verifica disabilitazione Timer allarme tramite Codice */
       {
         Serial.println(topic_payload);
-        stopTimerAndDisableAlarm();
+        stopTimerAndDisableAlarm(true);
         xSemaphoreTake(mutex_lcd, portMAX_DELAY);
         lcd.setCursor(0, 0);
         lcd.clear();
@@ -503,7 +538,8 @@ void TaskMovementDetection(void *pvParameters)
         {
           curr_distance = val;
         }
-        if ((curr_distance - last_distance) > MAX_DISTANCE || (curr_distance - last_distance) < -MAX_DISTANCE)
+        // MISRA C R. 12.1 OK
+        if (((curr_distance - last_distance) > MAX_DISTANCE) || ((curr_distance - last_distance) < -MAX_DISTANCE))
         {
           Serial.println("MOVEMENT DETECTED");
           xSemaphoreTake(mutex_lcd, portMAX_DELAY);
@@ -529,6 +565,7 @@ void TaskMovementDetection(void *pvParameters)
                 NULL,
                 10,
                 &Handle_TaskPassword);
+            xTimerStop(Timer_MovementDetection, 0);
             xTimerStart(Timer_Code, 0);
           }
           else
@@ -573,7 +610,12 @@ void TaskDisplay(void *pvParameters)
     if (home.alarm_mode && !home.alarm_sound)
     {
       char value[5];
-      snprintf(value, sizeof(value), "%d", home.open_slaves);
+      int ret = snprintf(value, sizeof(value), "%d", home.open_slaves);
+      if (ret < 0) // MISRA C R.17.7
+      {
+        Serial.println("Error snprintf");
+      }
+
       xSemaphoreGive(mutex_home);
       xSemaphoreTake(mutex_lcd, portMAX_DELAY);
       lcd.setCursor(0, 0);
@@ -587,7 +629,11 @@ void TaskDisplay(void *pvParameters)
     else if (!home.alarm_mode && !home.alarm_sound)
     {
       char value[5];
-      snprintf(value, sizeof(value), "%d", home.open_slaves);
+      int ret = snprintf(value, sizeof(value), "%d", home.open_slaves);
+      if (ret < 0) // MISRA C R.17.7
+      {
+        Serial.println("Error snprintf");
+      }
       xSemaphoreGive(mutex_home);
       xSemaphoreTake(mutex_lcd, portMAX_DELAY);
       lcd.setCursor(0, 0);
@@ -607,6 +653,10 @@ void TaskDisplay(void *pvParameters)
       lcd.setCursor(0, 1);
       lcd.print("ALARM SOUND ON!!");
       xSemaphoreGive(mutex_lcd);
+    }
+    else // MISRA C R. 15.7 OK
+    {
+      // TODO
     }
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
@@ -636,10 +686,10 @@ void TaskPassword(void *pvParameters)
   while (1)
   {
     //decodes the infrared input
-    if (IrReceiver.decode())
+    if (IrReceiver.decode() == true) // MISRA C R. 14.4
     {
       //Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
-      if (i < PASS_SIZE - 1)
+      if (i < (PASS_SIZE - 1)) // MISRA C R. 12.1 OK
       {
         xSemaphoreTake(mutex_lcd, portMAX_DELAY);
         switch (IrReceiver.decodedIRData.decodedRawData)
@@ -719,10 +769,11 @@ void TaskPassword(void *pvParameters)
           break;
         default:
           Serial.println("input not valid");
+          break; // MISRA C R. 16.3 OK
         }
         xSemaphoreGive(mutex_lcd);
       }
-      else if (i == PASS_SIZE - 1)
+      else if (i == (PASS_SIZE - 1)) // MISRA C R. 12.1 OK
       {
         xSemaphoreTake(mutex_lcd, portMAX_DELAY);
         switch (IrReceiver.decodedIRData.decodedRawData)
@@ -757,8 +808,13 @@ void TaskPassword(void *pvParameters)
           lcd.clear();
           lcd.print("INSERT CODE:");
           lcd.setCursor(0, 1);
+          break; // MISRA C R. 16.3 OK
         }
         xSemaphoreGive(mutex_lcd);
+      }
+      else // MISRA C R. 15.7 OK
+      {
+        Serial.println("Generic Error");
       }
       IrReceiver.resume(); // Receives the next value from the button you press
     }
@@ -787,7 +843,7 @@ void TaskPassword(void *pvParameters)
     lcd.print("PASSWORD OK");
     vTaskDelay(pdMS_TO_TICKS(1000));
     xSemaphoreGive(mutex_lcd);
-    stopTimerAndDisableAlarm();
+    stopTimerAndDisableAlarm(false);
     client.publish(topic_alarm_received, "Timer stopped and Alarm disabled");
     xSemaphoreTake(mutex_password, portMAX_DELAY);
     insert_password = false;
@@ -827,7 +883,7 @@ void WifiConnection()
 
 void mqttConnection()
 {
-  if (client.connect(clientid))
+  if (client.connect(clientid) == true) // MISRA C R. 14.4 OK
   {
     Serial.println("Connected to MQTT");
     subscriptions();
@@ -844,7 +900,7 @@ void reconnect()
   // Loop until we're reconnected
   while (!client.connected())
   {
-    if (client.connect(clientid))
+    if (client.connect(clientid) == true) // MISRA C R. 14.4 OK
     {
       Serial.println("Reconnected to MQTT");
       subscriptions();
@@ -871,14 +927,17 @@ struct tm getDateTime()
   return timeinfo;
 }
 
-void stopTimerAndDisableAlarm()
+void stopTimerAndDisableAlarm(bool from_app)
 {
   TickType_t xRemainingTime;
   xRemainingTime = xTimerGetExpiryTime(Timer_Code) - xTaskGetTickCount();
   Serial.print("Remaining time to activate alarm: ");
   Serial.println(xRemainingTime);
   xTimerStop(Timer_Code, 0);
-  xTimerStop(Timer_MovementDetection, 0);
+  if (from_app)
+  {
+    xTimerStop(Timer_MovementDetection, 0);
+  }
   xSemaphoreTake(mutex_home, portMAX_DELAY);
   home.alarm_mode = DISABLED;
   xSemaphoreGive(mutex_home);
@@ -937,6 +996,10 @@ void timer_callback(TimerHandle_t xTimer)
   else if (xTimer == Timer_Alarm)
   {
     xSemaphoreGiveFromISR(mutex_alarm, 0);
+  }
+  else // MISRA C R. 15.7 OK
+  {
+    Serial.println("Timer Handle not recognized");
   }
 }
 

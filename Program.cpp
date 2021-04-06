@@ -4,7 +4,7 @@
 int TERMINALS[] = {32, 35, 34, 39};
 int LED[] = {13, 12, 14, 27};
 int BUZZER = 2;
-int ALARM_LED = 4; 
+int ALARMLED = 4; 
 int MOV_TRIG = 16;
 int MOV_ECHO = 17;
 int DISPLAY1 = 22;
@@ -21,7 +21,7 @@ const char* clientid = "DevESP32%MQTT_HOME%";
 int TERMINALS[] = {23, 22, 21, 15};
 int LED[] = {12, 32, 13, 14};
 int BUZZER = 18;
-int ALARM_LED = 19; 
+int ALARMLED = 19; 
 int MOV_TRIG = 5;
 int MOV_ECHO = 4;
 const char* ssid     = "Vodafone-51555344";

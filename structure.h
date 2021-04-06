@@ -1,6 +1,14 @@
 #ifndef STRUCTURE_H
 #define STRUCTURE_H
 
+// MISRA C R. 20.1 OK
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <LiquidCrystal.h>
+#include <Ultrasonic.h>
+#include "time.h"
+
+
 // slaves terminal
 #define SLAVES 4
 
@@ -16,15 +24,17 @@
 #define CLOSE 0
 #define OPEN 1
 
-extern int TERMINALS[]; // input array dei pin dei pulsanti che simulano gli slaves
-extern int LED[];   // output array dei led che indicano lo stato degli slaves (aperti/chiusi)
+#define MAX_DISTANCE 5
+
+#define PASS_SIZE 5
+
+// MISRA.C REGOLA 8.11 
+extern int TERMINALS[SLAVES]; // input array dei pin dei pulsanti che simulano gli slaves
+extern int LED[SLAVES];   // output array dei led che indicano lo stato degli slaves (aperti/chiusi)
 extern int BUZZER;  // pin buzzer di allarme
-extern int ALARM_LED; // pin led di allarme
+extern int ALARMLED; // pin led di allarme
 
 // Load Wi-Fi library
-#include <WiFi.h>
-#include <PubSubClient.h>
-
 // Network credentials
 extern const char* ssid;
 extern const char* password;
@@ -44,7 +54,7 @@ extern const char* topic_open_slaves; // Tab contatore slave aperti
 extern const char* topic_motion_detection_code; // Pulsante disabilitazione timer di inserimento codice
 
 // DISPLAY-1602
-#include <LiquidCrystal.h>
+
 extern int DISPLAY1;
 extern int DISPLAY2;
 extern int DISPLAY3;
@@ -53,21 +63,18 @@ extern int DISPLAY5;
 extern int DISPLAY6;
 
 // HC-SR04 Distance sensor 
-#include <Ultrasonic.h>
-#define MAX_DISTANCE 5
 extern int MOV_TRIG; // Output pin HC-SR04 sensore rilevamento movimenti
 extern int MOV_ECHO; // Input pin HC-SR04 sensore rilevamento movimenti
 extern int curr_distance;
 extern int last_distance;
 extern bool first_read;
 
-#include "time.h"
+
 extern const char* ntpServer;
 extern const long  gmtOffset_sec;
 extern const int   daylightOffset_sec;
 
 
-#define PASS_SIZE 5
 extern int IR_Recv;
 extern bool insert_password; 
 extern char real_password[PASS_SIZE];
