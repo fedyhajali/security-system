@@ -17,13 +17,18 @@ const char* ssid     = "extender";
 const char* password = "freeRTOS";
 const char* clientid = "DevESP32%MQTT_HOME%";
 
-
-int TERMINALS[] = {23, 22, 21, 15};
-int LED[] = {12, 32, 13, 14};
-int BUZZER = 18;
-int ALARMLED = 19; 
-int MOV_TRIG = 5;
-int MOV_ECHO = 4;
+int TERMINALS[] = {37, 36, 33, 23};
+int LED[] = {13, 7, 15, 12};
+int BUZZER = 30;
+int ALARMLED = 31; 
+int MOV_TRIG = 29;
+int MOV_ECHO = 26;
+int DISPLAY1 = 5;
+int DISPLAY2 = 6;
+int DISPLAY3 = 11;
+int DISPLAY4 = 8;
+int DISPLAY5 = 25;
+int DISPLAY6 = 24;
 const char* ssid     = "Vodafone-51555344";
 const char* password = "uejst7ccxbkkivm";
 const char* clientid = "DevESP32%MQTT_BUZZ%";
@@ -51,7 +56,9 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
-int IR_Recv = 15;
+//int IR_Recv = 9;
+//int IR_Recv = 15;
+
 char real_password[PASS_SIZE] = "0000";
 char try_password[PASS_SIZE];
 bool insert_password = false;
