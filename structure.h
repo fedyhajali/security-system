@@ -10,7 +10,7 @@
 
 
 // slaves terminal
-#define SLAVES 4
+#define SLAVES 3
 
 // alarm mode
 #define DISABLED 0   
@@ -33,6 +33,10 @@ extern int TERMINALS[SLAVES]; // input array dei pin dei pulsanti che simulano g
 extern int LED[SLAVES];   // output array dei led che indicano lo stato degli slaves (aperti/chiusi)
 extern int BUZZER;  // pin buzzer di allarme
 extern int ALARMLED; // pin led di allarme
+extern int ALARMBUTTON; // pulsante abilita/disabilita allarme
+extern int rgbREDLED; // led RGB alarm mode
+extern int rgbGREENLED; // led RGB alarm mode
+extern int rgBLED; // led RGB alarm mode
 
 // Load Wi-Fi library
 // Network credentials

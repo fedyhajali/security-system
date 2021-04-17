@@ -9,6 +9,7 @@ TaskHandle_t Handle_TaskConnection;
 TaskHandle_t Handle_TaskMovementDetection;
 TaskHandle_t Handle_TaskDisplay;
 TaskHandle_t Handle_TaskPassword;
+TaskHandle_t Handle_TaskSetAlarmButton;
 
 // Timers
 TimerHandle_t Timer_Alarm;
@@ -30,6 +31,7 @@ void TaskConnection(void *pvParameters);
 void TaskMovementDetection(void *pvParameters);
 void TaskDisplay(void *pvParameters);
 void TaskPassword(void *pvParameters);
+void TaskSetAlarmButton(void *pvParameters);
 
 // shared struct resource
 struct home_state home;
@@ -43,6 +45,9 @@ void setup()
   Serial.begin(115200);
   pinMode(BUZZER, OUTPUT);
   pinMode(ALARMLED, OUTPUT);
+  pinMode(ALARMBUTTON, INPUT);
+  pinMode(rgbREDLED, OUTPUT);
+  pinMode(rgbGREENLED, OUTPUT);
 
   /* Inizializzazione Time Library */
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -59,6 +64,8 @@ void setup()
   home.alarm_mode = DISABLED;
   home.alarm_sound = OFF;
   home.open_slaves = 0;
+  digitalWrite(rgbREDLED, HIGH);
+  digitalWrite(rgbGREENLED, LOW);
   mutex_home = xSemaphoreCreateCounting(1, 1);
   mutex_alarm = xSemaphoreCreateCounting(1, 0);
   mutex_movement = xSemaphoreCreateCounting(1, 0);
@@ -104,6 +111,17 @@ void setup()
       15,                /* priority of the task */
       &Handle_TaskAlarm, /* Task handle to keep track of created task */
       0);                /* Task pinned to core */
+  delay(200);
+
+  /* Creazione task pulsante allarme */
+  xTaskCreatePinnedToCore(
+      TaskSetAlarmButton,
+      "Alarm button Task",
+      1000,
+      NULL,
+      12,
+      &Handle_TaskSetAlarmButton,
+      0);
   delay(200);
 
   /* Creazione task di connessione */
@@ -272,6 +290,36 @@ void TaskSlave(void *pvParameters)
   }
 }
 
+void TaskSetAlarmButton(void *pvParameters)
+{
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
+  // Initialise the xLastWakeTime variable with the current time.
+  xLastWakeTime = xTaskGetTickCount();
+
+  Serial.print("Created Task Alarm button on core: ");
+  Serial.println(xPortGetCoreID());
+
+  while (1)
+  {
+    if (digitalRead(ALARMBUTTON) == HIGH)
+    {
+      xSemaphoreTake(mutex_home, portMAX_DELAY);
+      if (home.alarm_mode)
+      {
+        client.publish(topic_alarm_mode_off, "Disable alarm");
+      }
+      else
+      {
+        client.publish(topic_alarm_mode_on, "Enable alarm");
+      }
+      xSemaphoreGive(mutex_home);
+    }
+
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+  }
+}
+
 void TaskConnection(void *pvParameters)
 {
   TickType_t xLastWakeTime;
@@ -322,6 +370,8 @@ void TaskMain(void *pvParameters)
         {
           home.alarm_mode = DISABLED;
           xSemaphoreGive(mutex_home);
+          digitalWrite(rgbREDLED, HIGH);
+          digitalWrite(rgbGREENLED, LOW);
           client.publish(topic_alarm_received, "Sound and alarm disabled");
           xSemaphoreGiveFromISR(mutex_alarm, 0);
           xTimerStop(Timer_Alarm, 0);
@@ -372,6 +422,8 @@ void TaskMain(void *pvParameters)
         {
           home.alarm_mode = ENABLED;
           xSemaphoreGive(mutex_home);
+          digitalWrite(rgbGREENLED, HIGH);
+          digitalWrite(rgbREDLED, LOW);
           client.publish(topic_alarm_received, topic_payload);
           xTimerStart(Timer_MovementDetection, 0);
           xSemaphoreTake(mutex_lcd, portMAX_DELAY);
@@ -432,6 +484,8 @@ void TaskMain(void *pvParameters)
         {
           home.alarm_mode = DISABLED;
           xSemaphoreGive(mutex_home);
+          digitalWrite(rgbGREENLED, LOW);
+          digitalWrite(rgbREDLED, HIGH);
           client.publish(topic_alarm_received, topic_payload);
           xTimerStop(Timer_MovementDetection, portMAX_DELAY);
           Serial.println(topic_payload);
@@ -941,6 +995,8 @@ void stopTimerAndDisableAlarm(bool from_app)
   xSemaphoreTake(mutex_home, portMAX_DELAY);
   home.alarm_mode = DISABLED;
   xSemaphoreGive(mutex_home);
+  digitalWrite(rgbREDLED, HIGH);
+  digitalWrite(rgbGREENLED, LOW);
   Serial.println("Timer stopped and Alarm Disabled");
 }
 

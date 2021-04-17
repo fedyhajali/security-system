@@ -1,10 +1,14 @@
 #include "structure.h"
 
 /*
-int TERMINALS[] = {32, 35, 34, 39};
-int LED[] = {13, 12, 14, 27};
+int TERMINALS[] = {35, 34, 39};
+int LED[] = {12, 14, 27};
 int BUZZER = 2;
-int ALARMLED = 4; 
+int ALARMLED = 4;
+int rgbREDLED = 13;
+int rgbGREENLED = 26;
+int rgBLED = 25;
+int ALARMBUTTON = 32;
 int MOV_TRIG = 16;
 int MOV_ECHO = 17;
 int DISPLAY1 = 22;
