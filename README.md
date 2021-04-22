@@ -1,2 +1,2 @@
-# AllarmSystem
-Project of a prototipe of Domotic Allarm System.
+# AlarmSystem
+Project of a prototipe of Domotic Alarm System.
