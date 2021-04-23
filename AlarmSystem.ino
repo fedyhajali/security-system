@@ -40,6 +40,9 @@ struct home_state home;
 /* Inizializzazione Diplay */
 LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
 
+
+bool ok = false;
+  
 void setup()
 {
 
@@ -230,16 +233,13 @@ void TaskSlave(void *pvParameters)
   {
     Serial.println("Error snprintf");
   }
-  bool ok = false;
 
   while (1)
   {
-    xTimerStart(WCET, 0);
-    TickType_t start = xTaskGetTickCount();
-    Serial.print("Start: ");
-    Serial.println(start);
+    // xTimerStart(WCET, 0);
     if (digitalRead(TERMINALS[id]) == HIGH)
     {
+
       xSemaphoreTake(mutex_home, portMAX_DELAY);
 
       home.slave_state[id] = !home.slave_state[id];
@@ -290,16 +290,6 @@ void TaskSlave(void *pvParameters)
       {
         xSemaphoreGive(mutex_home);
       }
-    }
-    if (!ok)
-    {
-      xTimerStop(WCET, 0);
-      TickType_t stopT = xTaskGetTickCount(); 
-      Serial.print("Stop: ");
-      Serial.println(stopT);
-      Serial.print("WCET TaskSlave ");
-      Serial.println(stopT - start);
-      ok = true;
     }
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
@@ -998,6 +988,30 @@ void stopTimerAndDisableAlarm(bool from_app)
   digitalWrite(rgbREDLED, HIGH);
   digitalWrite(rgbGREENLED, LOW);
   Serial.println("Timer stopped and Alarm Disabled");
+}
+
+TickType_t start = xTaskGetTickCount();
+TickType_t stopT = xTaskGetTickCount();
+
+void WCETstart()
+{
+  if (!ok)
+  {
+    Serial.print("Start: ");
+    Serial.println(start);
+  }
+}
+
+void WCETstop()
+{
+  if (!ok)
+  {
+    Serial.print("Stop: ");
+    Serial.println(stopT);
+    Serial.print("WCET TaskSlave ");
+    Serial.println((stopT - start) / portTICK_PERIOD_MS);
+    ok = true;
+  }
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
