@@ -60,8 +60,8 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
-int IR_Recv = 9;
-//int IR_Recv = 15;
+//int IR_Recv = 9;
+int IR_Recv = 15;
 
 char real_password[PASS_SIZE] = "0000";
 char try_password[PASS_SIZE];

@@ -1,12 +1,14 @@
 #ifndef STRUCTURE_H
 #define STRUCTURE_H
 
-// MISRA C R. 20.1 OK
-#include <WiFi.h>
 #include <PubSubClient.h>
+#include <WiFi.h>
 #include <LiquidCrystal.h>
 #include <Ultrasonic.h>
 #include "time.h"
+#include <IRremote.h>
+
+// MISRA C R. 20.1 OK
 
 
 // slaves terminal

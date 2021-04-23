@@ -1,5 +1,4 @@
 #include "structure.h"
-#include <IRremote.h>
 
 // TaskHandles
 TaskHandle_t Handle_TaskSlave[SLAVES];
@@ -40,9 +39,9 @@ struct home_state home;
 /* Inizializzazione Diplay */
 LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
 
-
 bool ok = false;
-  
+bool from_timer = false;
+
 void setup()
 {
 
@@ -81,7 +80,6 @@ void setup()
   Timer_MovementDetection = xTimerCreate("Movement sensor Timer", pdMS_TO_TICKS(2000), pdTRUE, NULL, timer_callback);
   Timer_Code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(20000), pdFALSE, NULL, timer_callback);
   Timer_Alarm = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(60000), pdFALSE, NULL, timer_callback);
-  WCET = xTimerCreate("WCET Timer", pdMS_TO_TICKS(60000), pdFALSE, NULL, timer_callback);
 
   Serial.println("Creating slave tasks..");
   delay(200);
@@ -199,6 +197,26 @@ void TaskAlarm(void *pvParameters)
     /*  SOSPENSIONE ALLARME */
     xSemaphoreTake(mutex_alarm, portMAX_DELAY);
 
+    if (from_timer)
+    {
+      xSemaphoreTake(mutex_home, portMAX_DELAY);
+      home.alarm_mode = DISABLED;
+      xSemaphoreGive(mutex_home);
+      digitalWrite(rgbREDLED, HIGH);
+      digitalWrite(rgbGREENLED, LOW);
+      client.publish(topic_alarm_received, "Timer expired: sound and alarm disabled");
+      xTimerStop(Timer_MovementDetection, 0);
+      xSemaphoreTake(mutex_lcd, portMAX_DELAY);
+      lcd.setCursor(0, 0);
+      lcd.clear();
+      lcd.print("Sound and alarm");
+      lcd.setCursor(0, 1);
+      lcd.print("disabled");
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      xSemaphoreGive(mutex_lcd);
+      from_timer = false;
+    }
+
     /*  SEMAFORO SEZIONE CRITICA */
     xSemaphoreTake(mutex_home, portMAX_DELAY);
     home.alarm_sound = OFF;
@@ -236,9 +254,9 @@ void TaskSlave(void *pvParameters)
 
   while (1)
   {
-    // xTimerStart(WCET, 0);
     if (digitalRead(TERMINALS[id]) == HIGH)
     {
+      WCETstart();
 
       xSemaphoreTake(mutex_home, portMAX_DELAY);
 
@@ -276,7 +294,6 @@ void TaskSlave(void *pvParameters)
           Serial.println("Error strftime");
         }
       }
-
       client.publish(topic_slaves, message);
       Serial.println(message);
       digitalWrite(LED[id], home.slave_state[id]);
@@ -290,6 +307,7 @@ void TaskSlave(void *pvParameters)
       {
         xSemaphoreGive(mutex_home);
       }
+      WCETstop();
     }
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
@@ -1065,6 +1083,7 @@ void timer_callback(TimerHandle_t xTimer)
   }
   else if (xTimer == Timer_Alarm)
   {
+    from_timer = true;
     xSemaphoreGiveFromISR(mutex_alarm, 0);
   }
   else // MISRA C R. 15.7 OK
