@@ -1,6 +1,6 @@
 #include "structure.h"
 
-/*
+
 int TERMINALS[] = {35, 34, 39};
 int LED[] = {12, 14, 27};
 int BUZZER = 2;
@@ -17,10 +17,10 @@ int DISPLAY3 = 5;
 int DISPLAY4 = 18;
 int DISPLAY5 = 19;
 int DISPLAY6 = 21;
-const char* ssid     = "extender";
-const char* password = "freeRTOS";
+const char* ssid     = "AndroidAPEE";
+const char* password = "testtest";
 const char* clientid = "DevESP32%MQTT_HOME%";
-
+/*
 int TERMINALS[] = {37, 36, 33, 23};
 int LED[] = {13, 7, 15, 12};
 int BUZZER = 30;
@@ -60,7 +60,7 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
-//int IR_Recv = 9;
+int IR_Recv = 9;
 //int IR_Recv = 15;
 
 char real_password[PASS_SIZE] = "0000";

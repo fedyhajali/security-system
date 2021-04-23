@@ -15,6 +15,7 @@ TaskHandle_t Handle_TaskSetAlarmButton;
 TimerHandle_t Timer_Alarm;
 TimerHandle_t Timer_MovementDetection;
 TimerHandle_t Timer_Code;
+TimerHandle_t WCET;
 
 // Semaphores
 SemaphoreHandle_t mutex_home;
@@ -77,6 +78,7 @@ void setup()
   Timer_MovementDetection = xTimerCreate("Movement sensor Timer", pdMS_TO_TICKS(2000), pdTRUE, NULL, timer_callback);
   Timer_Code = xTimerCreate("Alarm code Timer", pdMS_TO_TICKS(20000), pdFALSE, NULL, timer_callback);
   Timer_Alarm = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(60000), pdFALSE, NULL, timer_callback);
+  WCET = xTimerCreate("WCET Timer", pdMS_TO_TICKS(60000), pdFALSE, NULL, timer_callback);
 
   Serial.println("Creating slave tasks..");
   delay(200);
@@ -228,12 +230,16 @@ void TaskSlave(void *pvParameters)
   {
     Serial.println("Error snprintf");
   }
+  bool ok = false;
 
   while (1)
   {
+    xTimerStart(WCET, 0);
+    TickType_t start = xTaskGetTickCount();
+    Serial.print("Start: ");
+    Serial.println(start);
     if (digitalRead(TERMINALS[id]) == HIGH)
     {
-
       xSemaphoreTake(mutex_home, portMAX_DELAY);
 
       home.slave_state[id] = !home.slave_state[id];
@@ -284,6 +290,16 @@ void TaskSlave(void *pvParameters)
       {
         xSemaphoreGive(mutex_home);
       }
+    }
+    if (!ok)
+    {
+      xTimerStop(WCET, 0);
+      TickType_t stopT = xTaskGetTickCount(); 
+      Serial.print("Stop: ");
+      Serial.println(stopT);
+      Serial.print("WCET TaskSlave ");
+      Serial.println(stopT - start);
+      ok = true;
     }
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
@@ -409,10 +425,6 @@ void TaskMain(void *pvParameters)
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
         }
-        else // MISRA C R. 15.7 OK
-        {
-          // TODO
-        }
       }
       else if (strcmp(topic_id, topic_alarm_mode_on) == 0) /* Verifica abilitazione allarme */
       {
@@ -472,10 +484,6 @@ void TaskMain(void *pvParameters)
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
         }
-        else // MISRA C R. 15.7 OK
-        {
-          // TODO
-        }
       }
       else if (strcmp(topic_id, topic_alarm_mode_off) == 0) /* Verifica disabilitazione allarme */
       {
@@ -521,10 +529,6 @@ void TaskMain(void *pvParameters)
           lcd.print("is on!");
           vTaskDelay(pdMS_TO_TICKS(1000));
           xSemaphoreGive(mutex_lcd);
-        }
-        else // MISRA C R. 15.7 OK
-        {
-          // TODO
         }
       }
       else if (strcmp(topic_id, topic_motion_detection_code) == 0) /* Verifica disabilitazione Timer allarme tramite Codice */
@@ -707,10 +711,6 @@ void TaskDisplay(void *pvParameters)
       lcd.setCursor(0, 1);
       lcd.print("ALARM SOUND ON!!");
       xSemaphoreGive(mutex_lcd);
-    }
-    else // MISRA C R. 15.7 OK
-    {
-      // TODO
     }
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
