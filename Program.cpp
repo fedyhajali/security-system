@@ -15,6 +15,8 @@ int DISPLAY1 = 22;
 int DISPLAY2 = 23;
 int DISPLAY3 = 5;
 int DISPLAY4 = 18;
+int DISPLAY5 = 19;
+int DISPLAY6 = 21;
 int IR_Recv = 15;
 
 /*
