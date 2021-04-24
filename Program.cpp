@@ -15,24 +15,13 @@ int DISPLAY1 = 22;
 int DISPLAY2 = 23;
 int DISPLAY3 = 5;
 int DISPLAY4 = 18;
-int DISPLAY5 = 19;
-int DISPLAY6 = 21;
-const char* ssid     = "AndroidAPEE";
-const char* password = "testtest";
-const char* clientid = "DevESP32%MQTT_HOME%";
+int IR_Recv = 15;
+
 /*
-int TERMINALS[] = {37, 36, 33, 23};
-int LED[] = {13, 7, 15, 12};
-int BUZZER = 30;
-int ALARMLED = 31; 
-int MOV_TRIG = 29;
-int MOV_ECHO = 26;
-int DISPLAY1 = 5;
-int DISPLAY2 = 6;
-int DISPLAY3 = 11;
-int DISPLAY4 = 8;
-int DISPLAY5 = 25;
-int DISPLAY6 = 24;
+const char* ssid     = "extender";
+const char* password = "freeRTOS";
+const char* clientid = "DevESP32%MQTT_HOME%";
+
 const char* ssid     = "Vodafone-51555344";
 const char* password = "uejst7ccxbkkivm";
 const char* clientid = "DevESP32%MQTT_BUZZ%";
@@ -40,8 +29,8 @@ const char* clientid = "DevESP32%MQTT_BUZZ%";
 
 
 const char* mqtt_server = "broker.hivemq.com";
-char topic_id[30]; //copia del topic in arrivo in subscription
-char topic_payload[60]; //copia del payload in arrivo in subscription
+char topic_id[30]; 
+char topic_payload[60];
 boolean ACK = 0;
 
 const char* topic_alarm_sound = "KfZ91%%7BM@/ALLARM/SOUND";
@@ -60,13 +49,12 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
-//int IR_Recv = 9;
-int IR_Recv = 15;
-
 char real_password[PASS_SIZE] = "0000";
 char try_password[PASS_SIZE];
 bool insert_password = false;
 bool exit_while = false;
+
+bool give_fromTimer = false;
 
 WiFiClient espClient;
 PubSubClient client(mqtt_server, 1883, callback, espClient);
