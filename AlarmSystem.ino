@@ -98,7 +98,7 @@ void setup()
     xTaskCreate(
         TaskSlave,
         taskName,
-        2500,
+        5000,
         (void *)i,
         10,
         &Handle_TaskSlave[i]);
@@ -109,7 +109,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskAlarm,         /* Task function. */
       "Alarm Task",      /* name of task. */
-      2500,              /* Stack size of task */
+      5000,              /* Stack size of task */
       NULL,              /* parameter of the task */
       15,                /* priority of the task */
       &Handle_TaskAlarm, /* Task handle to keep track of created task */
@@ -120,7 +120,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskSetAlarmButton,
       "Alarm Button Task",
-      1000,
+      2000,
       NULL,
       12,
       &Handle_TaskSetAlarmButton,
@@ -131,7 +131,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskConnection,
       "Connection Task",
-      2500,
+      5000,
       NULL,
       10,
       &Handle_TaskConnection,
@@ -142,7 +142,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskMain,
       "Main Task",
-      2000,
+      10000,
       NULL,
       15,
       &Handle_TaskMain,
@@ -153,7 +153,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskMovementDetection,
       "Movement Detection Task",
-      1000,
+      10000,
       NULL,
       10,
       &Handle_TaskMovementDetection,
@@ -164,7 +164,7 @@ void setup()
   xTaskCreatePinnedToCore(
       TaskDisplay,
       "Display Task",
-      1000,
+      5000,
       NULL,
       10,
       &Handle_TaskDisplay,
@@ -447,22 +447,6 @@ void TaskMain(void *pvParameters)
             Serial.println("Timer_MovementDetection IS NOT active");
             // START
             xTimerStart(Timer_MovementDetection, 0);
-
-            // RESET
-            // xTimerReset(Timer_MovementDetection, 0);
-
-            // DELETE AND RECREATE
-            // xTimerDelete(Timer_MovementDetection, 0);
-            // Serial.println("Timer_MovementDetection DELETED");
-            // /* Creation of Movement Detection Task */
-            // xTaskCreatePinnedToCore(
-            //     TaskMovementDetection,
-            //     "Movement Detection Task",
-            //     1000,
-            //     NULL,
-            //     10,
-            //     &Handle_TaskMovementDetection,
-            //     1);
           }
 
           xSemaphoreTake(mutex_lcd, portMAX_DELAY);
@@ -657,7 +641,7 @@ void TaskMovementDetection(void *pvParameters)
             xTaskCreatePinnedToCore(
                 TaskPassword,
                 "Password Task",
-                3000,
+                10000,
                 NULL,
                 10,
                 &Handle_TaskPassword,
@@ -860,7 +844,6 @@ void TaskPassword(void *pvParameters)
           i = 0;
           break;
         default:
-          Serial.println("input not valid");
           break; // MISRA C R. 16.3 OK
         }
         xSemaphoreGive(mutex_lcd);
