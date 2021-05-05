@@ -20,8 +20,8 @@ int DISPLAY6 = 21;
 int IR_Recv = 15;
 
 /*
-const char* ssid     = "extender";
-const char* password = "freeRTOS";
+const char* ssid     = "AndroidAPEE";
+const char* password = "testtest";
 const char* clientid = "DevESP32%MQTT_HOME%";
 
 const char* ssid     = "Vodafone-51555344";

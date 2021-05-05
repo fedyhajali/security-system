@@ -64,7 +64,7 @@ void setup()
     pinMode(TERMINALS[i], INPUT);
     pinMode(LED[i], OUTPUT);
   }
-  home.alarm_mode = ENABLED;
+  home.alarm_mode = DISABLED;
   home.alarm_sound = OFF;
   home.open_slaves = 0;
   digitalWrite(rgbGREENLED, HIGH);
