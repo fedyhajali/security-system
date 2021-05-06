@@ -64,8 +64,8 @@ void setup()
   home.alarm_mode = DISABLED;
   home.alarm_sound = OFF;
   home.open_slaves = 0;
-  digitalWrite(rgbGREENLED, HIGH);
-  digitalWrite(rgbREDLED, LOW);
+  digitalWrite(rgbREDLED, HIGH);
+  digitalWrite(rgbGREENLED, LOW);
   mutex_home = xSemaphoreCreateCounting(1, 1);
   mutex_alarm = xSemaphoreCreateCounting(1, 0);
   mutex_movement = xSemaphoreCreateCounting(1, 0);
