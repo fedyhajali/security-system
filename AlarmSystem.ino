@@ -39,9 +39,6 @@ struct home_state home;
 /* Diplay Initialization */
 LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
 
-TickType_t startWCET;
-TickType_t stopWCET;
-
 void setup()
 {
 
@@ -196,7 +193,7 @@ void TaskAlarm(void *pvParameters)
     /*  Alarm suspension */
     xSemaphoreTake(mutex_alarm, portMAX_DELAY);
 
-    if (give_fromTimer) // If the xSemaphoreGive comes from the callback timer I have to disable the alarm
+    if (give_fromTimer) // If the xSemaphoreGive comes from the callback timer (Timer_Alarm Expired), i have to disable the alarm
     {
       xSemaphoreTake(mutex_home, portMAX_DELAY);
       home.alarm_mode = DISABLED;
@@ -1077,24 +1074,6 @@ void timer_callback(TimerHandle_t xTimer)
   }
 }
 
-void WCETstart()
-{
-  startWCET = millis();
-}
-
-void WCETstop()
-{
-  stopWCET = millis();
-  Serial.print("WCET Task: ");
-  Serial.println((stopWCET - startWCET));
-}
-
-void getStackHighWaterMark()
-{
-  Serial.print(pcTaskGetTaskName(NULL));
-  Serial.print(" uxTaskGetStackHighWaterMark = ");
-  Serial.println(uxTaskGetStackHighWaterMark(NULL));
-}
 
 void loop()
 {

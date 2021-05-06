@@ -96,7 +96,7 @@ struct home_state
   bool slave_state[SLAVES]; // slave state: OPEN/CLOSE
   bool alarm_mode;          // mode: DISABLED/ENABLED
   bool alarm_sound;         // ON/OFF per far suonare l'allarme
-  int open_slaves;          // contatore finestre aperte
+  int open_slaves;          // counter 
 };
 
 #endif

@@ -51,7 +51,7 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 7200;
 
-char real_password[PASS_SIZE] = "0000";
+char real_password[PASS_SIZE] = "0000";  // testing code
 char try_password[PASS_SIZE];
 bool insert_password = false;
 bool exit_while = false;
