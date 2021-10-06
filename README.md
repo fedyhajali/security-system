@@ -1,8 +1,6 @@
 # Home Security System
 Project of a Domotic Home Security System prototype.
 
-![](https://img.shields.io/github/stars/AlarmSystem/editor.md.svg) ![](https://img.shields.io/github/forks/AlarmSystem/editor.md.svg) ![](https://img.shields.io/github/tag/AlarmSystem/editor.md.svg) ![](https://img.shields.io/github/release/AlarmSystem/editor.md.svg) ![](https://img.shields.io/github/issues/AlarmSystem/editor.md.svg) ![](https://img.shields.io/bower/v/editor.md.svg)
-
 ## Description
 
 The “Home Security System” project consists in the creation of a prototype of an alarm system, therefore the device is designed for domestic use. The application therefore aims to simulate the operation of an anti-theft alarm through the use of hardware components. In short: the opening / closing of the windows of a hypothetical house was simulated through the use of buttons and LEDs. The use of an ultrasonic distance sensor HC SR04 allowed the detection of "suspicious" movements inside the house while an acoustic signal allows the emission of the alarm sound. The LCD display is used to show messages and notifications and an infrared sensor allows - using the appropriate remote control - to enter the code for deactivating the alarm.
@@ -73,6 +71,6 @@ Application available on the Play Store for Android Devices on this [link](https
   </tr>
 </table>
 
-## Author 
+## Authors
 
 Fedy Haj Ali, Daniela Koreta
