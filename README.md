@@ -25,6 +25,8 @@ The “Home Security System” project consists in the creation of a prototype o
     - Arduino IDE
     - MQTT 
 
+![img3](./imgs/img3.jpg)
+
 ## Software Tools
 
 The software tools used for the realization of the project are: Visual Studio Code as a development environment, Arduino IDE - with the FreeRTOS library for compiling and loading the program on the ESP32 board and git for sharing code. the realization of the project are: Visual Studio Code as a development environment, Arduino IDE - with the FreeRTOS library for Arduino - for compiling and loading the program on the ESP32 board and Git for code sharing between contributors.
@@ -50,22 +52,26 @@ Docs:
 
 https://docs.espressif.com/projects/esp-idf/en/latest/esp32/
 
-[image]
+![img2](./imgs/img2.jpg)
 
 ## Circuit Schematics
 
-[image]
+![img4](./imgs/img4.jpg)
 
 ## Synchronization
 
-[image]
+![img7](./imgs/img7.jpg)
 
 ## MQTT Dashboard Application
 
-Application available on the Play Store for Android Devices.
+Application available on the Play Store for Android Devices on this [link](https://play.google.com/store/apps/details?id=com.app.vetru.mqttdashboard)
 
-[image]
-
+<table>
+  <tr>
+    <td valign="top"><img src="./imgs/img5.jpg"/></td>
+    <td valign="top"><img src="./imgs/img6.jpg"/></td>
+  </tr>
+</table>
 
 ## Author 
 
