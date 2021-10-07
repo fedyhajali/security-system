@@ -27,8 +27,7 @@ The “Home Security System” project consists in the creation of a prototype o
 
 ## Software Tools
 
-The software tools used for the realization of the project are: Visual Studio Code as a development environment, Arduino IDE - with the FreeRTOS library for compiling and loading the program on the ESP32 board and git for sharing code. the realization of the project are: Visual Studio Code as a development environment, Arduino IDE - with the FreeRTOS library for Arduino - for compiling and loading the program on the ESP32 board and Git for code sharing between contributors.
-
+The software tools used for the realization of the project are: Visual Studio Code as a development environment, Arduino IDE - with the FreeRTOS library for compiling and loading the program on the ESP32 board and Git for code sharing between contributors.
 ## Tasks
 
 Application tasks:
