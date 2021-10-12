@@ -42,12 +42,9 @@ Application tasks:
 
 ## ESP32 Board
 
-Product: 
-https://www.espressif.com/en/products/socs/esp32
+Product: https://www.espressif.com/en/products/socs/esp32
 
-Docs:
-
-https://docs.espressif.com/projects/esp-idf/en/latest/esp32/
+Docs: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/
 
 ![img2](./imgs/img2.jpg)
 
