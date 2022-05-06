@@ -1,5 +1,5 @@
-# Home Security System
-Project of a Domotic Home Security System prototype.
+# home-security-system
+This is a project of a domotic Home Security System prototype realized for the "Embedded and Real-Time Systems" course at the University of Modena and Reggio Emilia.
 
 ## Description
 
