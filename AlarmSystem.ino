@@ -1,5 +1,4 @@
 #include "structure.h"
-#include <IRremote.h>
 
 // TaskHandles
 TaskHandle_t Handle_TaskSlave[SLAVES];
@@ -8,7 +7,6 @@ TaskHandle_t Handle_TaskMain;
 TaskHandle_t Handle_TaskConnection;
 TaskHandle_t Handle_TaskMovementDetection;
 TaskHandle_t Handle_TaskDisplay;
-TaskHandle_t Handle_TaskPassword;
 TaskHandle_t Handle_TaskSetAlarmButton;
 
 // Timers
@@ -21,7 +19,6 @@ SemaphoreHandle_t mutex_home;
 SemaphoreHandle_t mutex_alarm;
 SemaphoreHandle_t mutex_movement;
 SemaphoreHandle_t mutex_password;
-SemaphoreHandle_t mutex_lcd;
 
 // Task Definitions
 void TaskSlave(void *pvParameters);
@@ -30,29 +27,24 @@ void TaskMain(void *pvParameters);
 void TaskConnection(void *pvParameters);
 void TaskMovementDetection(void *pvParameters);
 void TaskDisplay(void *pvParameters);
-void TaskPassword(void *pvParameters);
 void TaskSetAlarmButton(void *pvParameters);
 
 // Shared resource
 struct home_state home;
 
-/* Diplay Initialization */
-LiquidCrystal lcd(DISPLAY1, DISPLAY2, DISPLAY3, DISPLAY4, DISPLAY5, DISPLAY6);
-
 void setup()
 {
 
   Serial.begin(115200);
+  pinMode(ALARMBUTTON, INPUT);
   pinMode(BUZZER, OUTPUT);
   pinMode(ALARMLED, OUTPUT);
-  pinMode(ALARMBUTTON, INPUT);
   pinMode(rgbREDLED, OUTPUT);
   pinMode(rgbGREENLED, OUTPUT);
 
   /* Time library Initialization */
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
-  lcd.begin(16, 2);
 
   /* Structure and semaphores Initialization */
   for (int i = 0; i < SLAVES; i++)
@@ -70,7 +62,6 @@ void setup()
   mutex_alarm = xSemaphoreCreateCounting(1, 0);
   mutex_movement = xSemaphoreCreateCounting(1, 0);
   mutex_password = xSemaphoreCreateCounting(1, 1);
-  mutex_lcd = xSemaphoreCreateCounting(1, 1);
 
   // MISRA C R. 11.6
   /* Creation of Software Timers */
@@ -157,16 +148,6 @@ void setup()
       1);
   delay(200);
 
-  /* Creation of Display Task */
-  xTaskCreatePinnedToCore(
-      TaskDisplay,
-      "Display Task",
-      5000,
-      NULL,
-      10,
-      &Handle_TaskDisplay,
-      1);
-  delay(200);
 }
 
 void TaskAlarm(void *pvParameters)
@@ -184,10 +165,11 @@ void TaskAlarm(void *pvParameters)
     home.alarm_sound = ON;
     xSemaphoreGive(mutex_home);
 
-    client.publish(topic_alarm_sound_text, "ALARM SOUND ON!");
     xTimerStart(Timer_Alarm, 0);
     digitalWrite(ALARMLED, HIGH);
     digitalWrite(BUZZER, HIGH);
+    client.publish(topic_sound_status, "ON");
+    client.publish(topic_notification, "*SOUND ON*");
     Serial.println("ALARM SOUND ON!");
 
     /*  Alarm suspension */
@@ -200,16 +182,9 @@ void TaskAlarm(void *pvParameters)
       xSemaphoreGive(mutex_home);
       digitalWrite(rgbREDLED, HIGH);
       digitalWrite(rgbGREENLED, LOW);
-      client.publish(topic_alarm_received, "Alarm Timer expired: sound and alarm disabled");
+      client.publish(topic_notification, "Alarm Timer expired: sound and alarm disabled");
+      Serial.println("Alarm Timer expired: sound and alarm disabled");
       xTimerStop(Timer_MovementDetection, 0);
-      xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-      lcd.setCursor(0, 0);
-      lcd.clear();
-      lcd.print("Sound and alarm");
-      lcd.setCursor(0, 1);
-      lcd.print("disabled");
-      vTaskDelay(pdMS_TO_TICKS(1000));
-      xSemaphoreGive(mutex_lcd);
       give_fromTimer = false;
     }
 
@@ -217,9 +192,11 @@ void TaskAlarm(void *pvParameters)
     home.alarm_sound = OFF;
     xSemaphoreGive(mutex_home);
 
-    client.publish(topic_alarm_sound_text, "ALARM SOUND OFF");
+
     digitalWrite(BUZZER, LOW);
     digitalWrite(ALARMLED, LOW);
+    client.publish(topic_sound_status, "OFF");
+    client.publish(topic_notification, "*SOUND OFF*");
     Serial.println("ALARM SOUND OFF");
   }
 }
@@ -242,7 +219,7 @@ void TaskSlave(void *pvParameters)
 
   /* Save the topic strings of each slave */
   char topic_slaves[24];
-  int ret = snprintf(topic_slaves, 24, "KfZ91%%%%7BM@/Window/%d", id);
+  int ret = snprintf(topic_slaves, 24, *basetopic + "terminals/%d", id);
   if (ret < 0) // MISRA C R.17.7 OK
   {
     Serial.println("Error snprintf");
@@ -270,6 +247,7 @@ void TaskSlave(void *pvParameters)
         Serial.println("Error snprintf");
       }
       client.publish(topic_open_slaves, value);
+      client.publish(topic_open, value);
       struct tm time = getDateTime();
       char message[40];
       if (home.slave_state[id])
@@ -323,11 +301,19 @@ void TaskSetAlarmButton(void *pvParameters)
       xSemaphoreTake(mutex_home, portMAX_DELAY);
       if (home.alarm_mode)
       {
-        client.publish(topic_alarm_mode_off, "Alarm Disabled");
+        home.alarm_mode = DISABLED;
+        digitalWrite(rgbREDLED, HIGH);
+        digitalWrite(rgbGREENLED, LOW);
+        client.publish(topic_notification, "Alarm Disabled");
+        client.publish(topic_mode_status, "OFF");
       }
       else
       {
-        client.publish(topic_alarm_mode_on, "Alarm Enabled");
+        home.alarm_mode = ENABLED;
+        digitalWrite(rgbGREENLED, HIGH);
+        digitalWrite(rgbREDLED, LOW);
+        client.publish(topic_notification, "Alarm Enabled");
+        client.publish(topic_mode_status, "ON");
       }
       xSemaphoreGive(mutex_home);
     }
@@ -375,7 +361,7 @@ void TaskMain(void *pvParameters)
   {
     if (client.connected() && ACK) /* ACK => New message */
     {
-      if (strcmp(topic_id, topic_alarm_sound) == 0) /* Verifiy deactivation of the alarm sound */
+      if (strcmp(topic_id, topic_sound_off) == 0) /* Verifiy deactivation of the alarm sound */
       {
         xSemaphoreTake(mutex_home, portMAX_DELAY);
         if (home.alarm_mode && home.alarm_sound)
@@ -384,45 +370,24 @@ void TaskMain(void *pvParameters)
           xSemaphoreGive(mutex_home);
           digitalWrite(rgbREDLED, HIGH);
           digitalWrite(rgbGREENLED, LOW);
-          client.publish(topic_alarm_received, "Sound and alarm disabled");
+          client.publish(topic_notification, "Sound and alarm disabled");
+          client.publish(topic_sound_status, "OFF");
           xSemaphoreGiveFromISR(mutex_alarm, 0);
           xTimerStop(Timer_Alarm, 0);
           xTimerStop(Timer_MovementDetection, 0);
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Sound and alarm");
-          lcd.setCursor(0, 1);
-          lcd.print("disabled");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
         }
         else if (!home.alarm_mode)
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Alarm is disabled!");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm already");
-          lcd.setCursor(0, 1);
-          lcd.print("disabled!");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Alarm is disabled!");
         }
         else if (home.alarm_mode && !home.alarm_sound)
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Sound is off!");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Sound is off!");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Sound is off!");
         }
       }
-      else if (strcmp(topic_id, topic_alarm_mode_on) == 0) /* Verify alarm enabling */
+      else if (strcmp(topic_id, topic_mode_on) == 0) /* Verify alarm enabling */
       {
         xSemaphoreTake(mutex_home, portMAX_DELAY);
         // MISRA C R. 12.1 OK
@@ -432,7 +397,7 @@ void TaskMain(void *pvParameters)
           xSemaphoreGive(mutex_home);
           digitalWrite(rgbGREENLED, HIGH);
           digitalWrite(rgbREDLED, LOW);
-          client.publish(topic_alarm_received, topic_payload);
+          client.publish(topic_notification, topic_payload);
           if (xTimerIsTimerActive(Timer_MovementDetection) != pdFALSE)
           {
             /* xTimer is active, do something. */
@@ -446,54 +411,24 @@ void TaskMain(void *pvParameters)
             xTimerStart(Timer_MovementDetection, 0);
           }
 
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm enabled");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
         }
         else if (home.open_slaves > 0) // MISRA C R. 14.4 OK
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Slaves open, can't enable alarm");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Slaves open");
-          lcd.setCursor(0, 1);
-          lcd.print("can't enable alarm");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Error - Slaves open, it'impossible to enable alarm");
         }
         else if (home.alarm_mode)
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Alarm already enabled!");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm already");
-          lcd.setCursor(0, 1);
-          lcd.print("enabled!");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Error - Alarm already enabled!");
         }
         else if (home.alarm_sound)
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Alarm sound is ON!");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm sound");
-          lcd.setCursor(0, 1);
-          lcd.print("is ON!");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Error - Alarm sound is ON!");
         }
       }
-      else if (strcmp(topic_id, topic_alarm_mode_off) == 0) /* Verify alarm disabling */
+      else if (strcmp(topic_id, topic_mode_off) == 0) /* Verify alarm disabling */
       {
         xSemaphoreTake(mutex_home, portMAX_DELAY);
         if (home.alarm_mode && !home.alarm_sound)
@@ -502,59 +437,30 @@ void TaskMain(void *pvParameters)
           xSemaphoreGive(mutex_home);
           digitalWrite(rgbGREENLED, LOW);
           digitalWrite(rgbREDLED, HIGH);
-          client.publish(topic_alarm_received, topic_payload);
+          client.publish(topic_notification, topic_payload);
           xTimerStop(Timer_MovementDetection, portMAX_DELAY);
           Serial.println(topic_payload);
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm disabled");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
         }
         else if (!home.alarm_mode)
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Alarm already disabled!");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm already");
-          lcd.setCursor(0, 1);
-          lcd.print("disabled!");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Error - Alarm already disabled!");
         }
         else if (home.alarm_sound)
         {
           xSemaphoreGive(mutex_home);
-          client.publish(topic_alarm_received, "Alarm sound is on!");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Alarm sound");
-          lcd.setCursor(0, 1);
-          lcd.print("is on!");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "Error - Alarm sound is on!");
         }
       }
-      else if (strcmp(topic_id, topic_motion_detection_code) == 0) /* Check disabling of alarm timer by code */
+      else if (strcmp(topic_id, topic_code) == 0) /* Check disabling of alarm timer by code */
       {
         Serial.println(topic_payload);
         stopTimerAndDisableAlarm();
-        xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-        lcd.setCursor(0, 0);
-        lcd.clear();
-        lcd.print("PASSWORD OK");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        xSemaphoreGive(mutex_lcd);
         xSemaphoreTake(mutex_password, portMAX_DELAY);
         insert_password = false;
         xSemaphoreGive(mutex_password);
-        vTaskDelete(Handle_TaskPassword);
         vTaskResume(Handle_TaskDisplay);
-        client.publish(topic_alarm_received, "Timer stopped and alarm disabled with App code");
+        client.publish(topic_notification, "Timer stopped and alarm disabled with App code");
       }
       else
       {
@@ -567,6 +473,24 @@ void TaskMain(void *pvParameters)
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
+}
+
+void stopTimerAndDisableAlarm()
+{
+  TickType_t xRemainingTime;
+  xRemainingTime = xTimerGetExpiryTime(Timer_Code) - xTaskGetTickCount();
+  char message[40];
+  snprintf(message, sizeof(message), "Remaining time to activate alarm: %s", xRemainingTime);
+  Serial.println(message);
+  client.publish(topic_notification, message);
+  xTimerStop(Timer_Code, 0);
+  xSemaphoreTake(mutex_home, portMAX_DELAY);
+  home.alarm_mode = DISABLED;
+  xSemaphoreGive(mutex_home);
+  digitalWrite(rgbREDLED, HIGH);
+  digitalWrite(rgbGREENLED, LOW);
+  Serial.println("Timer stopped and Alarm Disabled");
+  client.publish(topic_notification, "Timer stopped and Alarm Disabled");
 }
 
 void TaskMovementDetection(void *pvParameters)
@@ -597,6 +521,7 @@ void TaskMovementDetection(void *pvParameters)
         val = ultrasonic.distanceRead();
         Serial.print("distance: ");
         Serial.println(val);
+        client.publish(topic_distance, (const char*)val);
         if (val != 0)
         {
           last_distance = val;
@@ -610,6 +535,7 @@ void TaskMovementDetection(void *pvParameters)
         val = ultrasonic.distanceRead();
         Serial.print("distance: ");
         Serial.println(val);
+        client.publish(topic_distance, (const char*)val);
 
         if (val != 0)
         {
@@ -619,14 +545,7 @@ void TaskMovementDetection(void *pvParameters)
         if (((curr_distance - last_distance) > MAX_DISTANCE) || ((curr_distance - last_distance) < -MAX_DISTANCE))
         {
           Serial.println("MOVEMENT DETECTED");
-          xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("** MOVEMENT **");
-          lcd.setCursor(0, 1);
-          lcd.print("** DETECTED **");
-          vTaskDelay(pdMS_TO_TICKS(1000));
-          xSemaphoreGive(mutex_lcd);
+          client.publish(topic_notification, "MOVEMENT DETECTED");
           xSemaphoreTake(mutex_home, portMAX_DELAY);
           if (!home.alarm_sound)
           {
@@ -634,15 +553,6 @@ void TaskMovementDetection(void *pvParameters)
             xSemaphoreTake(mutex_password, portMAX_DELAY);
             insert_password = true;
             xSemaphoreGive(mutex_password);
-            /* Creation of Password Task */
-            xTaskCreatePinnedToCore(
-                TaskPassword,
-                "Password Task",
-                10000,
-                NULL,
-                10,
-                &Handle_TaskPassword,
-                1);
           }
           else
           {
@@ -692,14 +602,10 @@ void TaskDisplay(void *pvParameters)
       }
 
       xSemaphoreGive(mutex_home);
-      xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-      lcd.setCursor(0, 0);
-      lcd.clear();
-      lcd.print("ALARM: ON");
-      lcd.setCursor(0, 1);
-      lcd.print("OPEN SLAVES: ");
-      lcd.print(value);
-      xSemaphoreGive(mutex_lcd);
+      char message[32];
+      snprintf(message, sizeof(message), "Alarm ON, Open slaves: %s", value);
+      Serial.println(message);
+      client.publish(topic_general, message);
     }
     else if (!home.alarm_mode && !home.alarm_sound)
     {
@@ -709,229 +615,21 @@ void TaskDisplay(void *pvParameters)
       {
         Serial.println("Error snprintf");
       }
-      xSemaphoreGive(mutex_home);
-      xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-      lcd.setCursor(0, 0);
-      lcd.clear();
-      lcd.print("ALARM: OFF");
-      lcd.setCursor(0, 1);
-      lcd.print("OPEN SLAVES: ");
-      lcd.print(value);
-      xSemaphoreGive(mutex_lcd);
+
+      char message[32];
+      snprintf(message, sizeof(message), "Alarm ON, Open slaves: %s", value);
+      Serial.println(message);
+      client.publish(topic_general, message);
     }
     else if (home.alarm_sound)
     {
-      xSemaphoreGive(mutex_home);
-      xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-      lcd.setCursor(0, 0);
-      lcd.print("** ATTENTION **");
-      lcd.setCursor(0, 1);
-      lcd.print("ALARM SOUND ON!!");
-      xSemaphoreGive(mutex_lcd);
+      xSemaphoreGive(mutex_home);      
+      char *message = "ATTENTION **, ALARM SOUND ON!";
+      Serial.println(message);
+      client.publish(topic_general, message);
     }
 
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
-  }
-}
-
-void TaskPassword(void *pvParameters)
-{
-  TickType_t xLastWakeTime;
-  const TickType_t xFrequency = 700 / portTICK_PERIOD_MS;
-  xLastWakeTime = xTaskGetTickCount();
-
-  Serial.print("Created Password Task on core: ");
-  Serial.println(xPortGetCoreID());
-
-  xTimerStop(Timer_MovementDetection, portMAX_DELAY);
-  xTimerStart(Timer_Code, 0);
-
-  IrReceiver.begin(IR_Recv, DISABLE_LED_FEEDBACK);
-  int i = 0;
-
-  xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-  lcd.setCursor(0, 0);
-  lcd.clear();
-  lcd.print("INSERT CODE:");
-  lcd.setCursor(0, 1);
-  xSemaphoreGive(mutex_lcd);
-
-  while (1)
-  {
-    //decodes the infrared input
-    if (IrReceiver.decode() == true) // MISRA C R. 14.4
-    {
-      //Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
-      if (i < (PASS_SIZE - 1)) // MISRA C R. 12.1 OK
-      {
-        xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-        switch (IrReceiver.decodedIRData.decodedRawData)
-        {
-        case 0xE916FF00: // 0 button
-          Serial.print("0");
-          lcd.print("0");
-          try_password[i] = '0';
-          i++;
-          break;
-        case 0xF30CFF00: // 1 button
-          Serial.print("1");
-          lcd.print("1");
-          try_password[i] = '1';
-          i++;
-          break;
-        case 0xE718FF00: // 2 button
-          Serial.print("2");
-          lcd.print("2");
-          try_password[i] = '2';
-          i++;
-          break;
-        case 0xA15EFF00: // 3 button
-          Serial.print("3");
-          lcd.print("3");
-          try_password[i] = '3';
-          i++;
-          break;
-        case 0xF708FF00: // 4 button
-          Serial.print("4");
-          lcd.print("4");
-          try_password[i] = '4';
-          i++;
-          break;
-        case 0xE31CFF00: // 5 button
-          Serial.print("5");
-          lcd.print("5");
-          try_password[i] = '5';
-          i++;
-          break;
-        case 0xA55AFF00: // 6 button
-          Serial.print("6");
-          lcd.print("6");
-          try_password[i] = '6';
-          i++;
-          break;
-        case 0xBD42FF00: // 7 button
-          Serial.print("7");
-          lcd.print("7");
-          try_password[i] = '7';
-          i++;
-          break;
-        case 0xAD52FF00: // 8 button
-          Serial.print("8");
-          lcd.print("8");
-          try_password[i] = '8';
-          i++;
-          break;
-        case 0xB54AFF00: // 9 button
-          Serial.print("9");
-          lcd.print("9");
-          try_password[i] = '9';
-          i++;
-          break;
-        case 0xBC43FF00: // RESET button
-          Serial.println();
-          Serial.println("RESET");
-          lcd.clear();
-          lcd.print("RESET");
-          vTaskDelay(pdMS_TO_TICKS(500));
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("INSERT CODE:");
-          lcd.setCursor(0, 1);
-          memset(try_password, 0, sizeof(try_password));
-          i = 0;
-          break;
-        default:
-          break; // MISRA C R. 16.3 OK
-        }
-        xSemaphoreGive(mutex_lcd);
-      }
-      else if (i == (PASS_SIZE - 1)) // MISRA C R. 12.1 OK
-      {
-        xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-        switch (IrReceiver.decodedIRData.decodedRawData)
-        {
-        case 0xF609FF00: // OK button
-          Serial.println();
-          Serial.println(" - OK");
-          exit_while = true;
-          break;
-        case 0xBC43FF00: // RESET button
-          Serial.println();
-          Serial.println("RESET");
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("RESET");
-          vTaskDelay(pdMS_TO_TICKS(500));
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("INSERT CODE:");
-          lcd.setCursor(0, 1);
-          memset(try_password, 0, sizeof(try_password));
-          i = 0;
-          break;
-        default:
-          Serial.println();
-          Serial.println("Error password size, please check or reset.");
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("Error size");
-          vTaskDelay(pdMS_TO_TICKS(500));
-          lcd.setCursor(0, 0);
-          lcd.clear();
-          lcd.print("INSERT CODE:");
-          lcd.setCursor(0, 1);
-          break; // MISRA C R. 16.3 OK
-        }
-        xSemaphoreGive(mutex_lcd);
-      }
-      else // MISRA C R. 15.7 OK
-      {
-        Serial.println("Generic Error");
-      }
-      IrReceiver.resume(); // Receives the next value from the button you press
-    }
-
-    if (exit_while)
-    {
-      Serial.print("Password: ");
-      Serial.println(try_password);
-      Serial.println("Break from while");
-      break;
-    }
-
-    vTaskDelayUntil(&xLastWakeTime, xFrequency);
-  }
-
-  Serial.println("Check password..");
-  exit_while = false;
-
-  /* CHECK PASSWORD MATCHING */
-  if (strcmp(try_password, real_password) == 0)
-  {
-    Serial.println("PASSWORD OK!");
-    xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-    lcd.setCursor(0, 0);
-    lcd.clear();
-    lcd.print("PASSWORD OK");
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    xSemaphoreGive(mutex_lcd);
-    stopTimerAndDisableAlarm();
-    client.publish(topic_alarm_received, "Timer stopped and Alarm disabled");
-    xSemaphoreTake(mutex_password, portMAX_DELAY);
-    insert_password = false;
-    xSemaphoreGive(mutex_password);
-    vTaskResume(Handle_TaskDisplay);
-    vTaskDelete(NULL);
-  }
-  else
-  {
-    Serial.println("PASSWORD FAIL!");
-    xSemaphoreTake(mutex_lcd, portMAX_DELAY);
-    lcd.setCursor(0, 0);
-    lcd.clear();
-    lcd.print("PASSWORD FAIL");
-    xSemaphoreGive(mutex_lcd);
-    vTaskSuspend(NULL);
   }
 }
 
@@ -982,11 +680,12 @@ void reconnect()
 
 void subscriptions()
 {
-  client.subscribe(topic_alarm_sound);
-  client.subscribe(topic_alarm_mode_on);
-  client.subscribe(topic_alarm_mode_off);
-  client.subscribe(topic_motion_detection_code);
+  client.subscribe(topic_sound_off);
+  client.subscribe(topic_mode_on);
+  client.subscribe(topic_mode_off);
+  client.subscribe(topic_code);
 }
+
 struct tm getDateTime()
 {
   struct tm timeinfo;
@@ -997,21 +696,6 @@ struct tm getDateTime()
   }
 
   return timeinfo;
-}
-
-void stopTimerAndDisableAlarm()
-{
-  TickType_t xRemainingTime;
-  xRemainingTime = xTimerGetExpiryTime(Timer_Code) - xTaskGetTickCount();
-  Serial.print("Remaining time to activate alarm: ");
-  Serial.println(xRemainingTime);
-  xTimerStop(Timer_Code, 0);
-  xSemaphoreTake(mutex_home, portMAX_DELAY);
-  home.alarm_mode = DISABLED;
-  xSemaphoreGive(mutex_home);
-  digitalWrite(rgbREDLED, HIGH);
-  digitalWrite(rgbGREENLED, LOW);
-  Serial.println("Timer stopped and Alarm Disabled");
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
@@ -1060,7 +744,6 @@ void timer_callback(TimerHandle_t xTimer)
     insert_password = false;
     xSemaphoreGive(mutex_password);
     vTaskResume(Handle_TaskDisplay);
-    vTaskDelete(Handle_TaskPassword);
     xSemaphoreGiveFromISR(mutex_alarm, 0);
   }
   else if (xTimer == Timer_Alarm)

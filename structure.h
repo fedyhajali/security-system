@@ -9,7 +9,7 @@
 #include "time.h"
 
 // slaves terminal
-#define SLAVES 3
+#define SLAVES 2
 
 // alarm mode
 #define DISABLED 0
@@ -47,6 +47,18 @@ extern const char *clientid;    // MQTT client ID
 extern char topic_id[30];                       // copy of the incoming topic
 extern char topic_payload[60];                  // copy of the incoming payload
 extern boolean ACK;                             // true if there is an ACK message to send
+extern const char *basetopic;                   // Topics BaseName
+extern const char *topic_mode_status;           // Alarm Mode
+extern const char *topic_mode_on;               // Alarm Mode activation button
+extern const char *topic_mode_off;              // Alarm Mode deactivation button
+extern const char *topic_sound_status;          // Alarm Sound
+extern const char *topic_sound_off;             // Alarm Sound deactivation button
+extern const char *topic_notification;          // Alarm Notification
+extern const char *topic_open;                  // Alarm Open terminals Counter 
+extern const char *topic_code;                  // Alarm Code
+extern const char *topic_general;               // Alarm General Informations
+extern const char *topic_distance;              // Alarm Distance Informations
+
 extern const char *topic_alarm_mode_on;         // Alarm activation button
 extern const char *topic_alarm_mode_off;        // Alarm deactivation button
 extern const char *topic_alarm_sound;           // Alarm sound deactivation button
@@ -55,13 +67,6 @@ extern const char *topic_alarm_received;        // Reception tab, ACK of command
 extern const char *topic_open_slaves;           // Open slave counter tab
 extern const char *topic_motion_detection_code; // Button to enter code and disable timer
 
-// DISPLAY-1602 pins
-extern int DISPLAY1;
-extern int DISPLAY2;
-extern int DISPLAY3;
-extern int DISPLAY4;
-extern int DISPLAY5;
-extern int DISPLAY6;
 
 // HC-SR04 Motion Detection sensor
 extern int MOV_TRIG;      // Output pin HC-SR04
@@ -75,12 +80,8 @@ extern const char *ntpServer;
 extern const long gmtOffset_sec;
 extern const int daylightOffset_sec;
 
-// Remote control and Infrared Receiver
-extern int IR_Recv;
+// Mutex for password 
 extern bool insert_password;
-extern char real_password[PASS_SIZE];
-extern char try_password[PASS_SIZE];
-extern bool exit_while;
 
 // SemaphoreGive to Alarm from Timer Callback
 extern bool give_fromTimer;
@@ -95,7 +96,7 @@ struct home_state
 {
   bool slave_state[SLAVES]; // slave state: OPEN/CLOSE
   bool alarm_mode;          // mode: DISABLED/ENABLED
-  bool alarm_sound;         // ON/OFF per far suonare l'allarme
+  bool alarm_sound;         // sound: ON/OFF
   int open_slaves;          // counter 
 };
 
